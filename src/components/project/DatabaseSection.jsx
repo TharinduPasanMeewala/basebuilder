@@ -41,27 +41,42 @@ export default function DatabaseSection({ project, onRefresh }) {
         base44.entities.Conversation.filter({ project_id: project.id }),
         base44.entities.Requirement.filter({ project_id: project.id }),
       ]);
-      const chatContext = convos.flatMap(c => c.messages || []).map(m => `${m.role}: ${m.content}`).join('\n').slice(0, 4000);
-      const reqContext = reqs.map(r => `- ${r.title}: ${r.description}`).join('\n').slice(0, 2000);
+
+      // Safely extract text content from messages (content can be string or object)
+      const allMessages = convos.flatMap(c => c.messages || []);
+      const chatContext = allMessages
+        .filter(m => m.role && typeof m.content === 'string' && m.content.length > 0)
+        .slice(-30)
+        .map(m => `${m.role}: ${m.content.slice(0, 300)}`)
+        .join('\n')
+        .slice(0, 3000);
+
+      const reqContext = reqs.map(r => `- [${r.priority || 'medium'}] ${r.title}: ${r.description || ''}`).join('\n').slice(0, 2000);
+
+      const prompt = `You are a database architect. Design a complete database schema for a ${project.type?.replace(/_/g, ' ')} application called "${project.name}"${project.description ? ` — ${project.description}` : ''}.
+
+REQUIREMENTS:
+${reqContext || '(No requirements defined yet — generate a typical, comprehensive schema for this application type)'}
+
+CONVERSATION CONTEXT:
+${chatContext || '(No conversation context)'}
+
+Generate 8-12 entities. Each entity MUST have 4-8 fields with name, type, required flag, and description.
+Field types must be one of: string, text, number, integer, boolean, date, datetime, json, array, email, url, enum.
+Return ONLY the JSON, no extra text.`;
 
       const result = await base44.integrations.Core.InvokeLLM({
-        prompt: `Design the complete database schema for a ${project.type?.replace(/_/g, ' ')} application called "${project.name}".
-
-Context from requirements:
-${reqContext || 'No requirements yet - generate a typical schema for this type of application.'}
-
-Chat context:
-${chatContext || 'No chat context.'}
-
-Generate a comprehensive data model with 8-15 entities. Each entity MUST have at least 4-8 fields. Include all necessary fields, relationships, and indexes.`,
+        prompt,
         model: 'claude_sonnet_4_6',
         response_json_schema: {
           type: 'object',
+          required: ['entities'],
           properties: {
             entities: {
               type: 'array',
               items: {
                 type: 'object',
+                required: ['name', 'fields'],
                 properties: {
                   name: { type: 'string' },
                   description: { type: 'string' },
@@ -70,6 +85,7 @@ Generate a comprehensive data model with 8-15 entities. Each entity MUST have at
                     type: 'array',
                     items: {
                       type: 'object',
+                      required: ['name', 'type'],
                       properties: {
                         name: { type: 'string' },
                         type: { type: 'string' },
@@ -87,7 +103,7 @@ Generate a comprehensive data model with 8-15 entities. Each entity MUST have at
                       type: 'object',
                       properties: {
                         related_entity: { type: 'string' },
-                        type: { type: 'string' },
+                        type: { type: 'string', enum: ['one_to_one', 'one_to_many', 'many_to_many'] },
                         description: { type: 'string' }
                       }
                     }
@@ -101,7 +117,7 @@ Generate a comprehensive data model with 8-15 entities. Each entity MUST have at
 
       const ents = result?.entities || [];
       if (ents.length === 0) {
-        toast({ title: 'No entities generated', description: 'The AI did not return any entities. Try adding more requirements first.', variant: 'destructive' });
+        toast({ title: 'No entities generated', description: 'Please try again — the AI may need more context. Add requirements first or try again.', variant: 'destructive' });
         return;
       }
 
