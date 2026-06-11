@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Globe, Zap, CheckCircle2, Circle, Loader2, ExternalLink, Copy, Check,
-  Package, Server, Database, Layout, GitBranch, Shield, Wand2,
+  Package, Server, Database, Layout, GitBranch, Shield,
   Terminal, RefreshCw, AlertCircle, ChevronDown, ChevronRight, Sparkles
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
@@ -176,33 +176,41 @@ Return ONLY a JSON object (no markdown):
 
       // ── STEP: frontend ──
       setStep('frontend', 'running');
-      addLog(`Generating ${frontendStack} frontend pages…`);
+      addLog(`Generating ${frontendStack} + Vite + Tailwind frontend…`);
 
       const frontendCode = await base44.integrations.Core.InvokeLLM({
-        prompt: `Generate production-ready ${frontendStack} frontend code for "${project.name}" (${project.type?.replace(/_/g, ' ')}).
+        prompt: `Generate a complete Vite + React + Tailwind CSS project for "${project.name}" (${project.type?.replace(/_/g, ' ')}).
 
-Pages to generate:
+Pages needed:
 ${pages.slice(0, 10).map(p => `- ${p.name} (${p.type}): ${p.route || '/' + p.name.toLowerCase()} — ${p.description || ''}`).join('\n') || '- Dashboard, List, Detail pages'}
 
-Tech: ${frontendStack}, Tailwind CSS, modern component patterns.
+Entities: ${entities.map(e => e.name).join(', ') || 'records'}
 
-Return ONLY a JSON object (no markdown):
+Generate REAL, complete, production-ready code. No placeholders.
+
+Return ONLY a JSON object (no markdown fences):
 {
-  "app_router": "// Main app router with all page routes",
-  "dashboard_page": "// Dashboard/home page component",
-  "layout_component": "// Shared layout with navigation"
+  "app_jsx": "complete App.jsx with react-router-dom Routes for all pages",
+  "main_jsx": "complete main.jsx entry point",
+  "index_html": "complete index.html with Vite script tag and meta tags",
+  "index_css": "complete index.css with @tailwind directives and custom CSS variables",
+  "dashboard_page": "complete src/pages/Dashboard.jsx with real UI using Tailwind",
+  "layout_component": "complete src/components/Layout.jsx with sidebar/nav"
 }`,
         response_json_schema: {
           type: 'object',
           properties: {
-            app_router: { type: 'string' },
+            app_jsx: { type: 'string' },
+            main_jsx: { type: 'string' },
+            index_html: { type: 'string' },
+            index_css: { type: 'string' },
             dashboard_page: { type: 'string' },
             layout_component: { type: 'string' },
           },
         },
       });
 
-      addLog(`Frontend: ${pages.length} pages scaffolded`);
+      addLog(`Frontend: ${pages.length} pages + Vite config generated`);
       setStep('frontend', 'done');
 
       // ── STEP: workflows ──
@@ -252,38 +260,115 @@ Return ONLY a JSON object (no markdown):
       setStep('publish', 'done');
 
       // Build generated code bundle
+      const viteConfig = `import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import path from 'path'
+
+export default defineConfig({
+  plugins: [react()],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
+})`;
+
+      const tailwindConfig = `/** @type {import('tailwindcss').Config} */
+module.exports = {
+  darkMode: ['class'],
+  content: ['./index.html', './src/**/*.{ts,tsx,js,jsx}'],
+  theme: {
+    extend: {
+      colors: {
+        primary: { DEFAULT: 'hsl(var(--primary))', foreground: 'hsl(var(--primary-foreground))' },
+        background: 'hsl(var(--background))',
+        foreground: 'hsl(var(--foreground))',
+        card: { DEFAULT: 'hsl(var(--card))', foreground: 'hsl(var(--card-foreground))' },
+        muted: { DEFAULT: 'hsl(var(--muted))', foreground: 'hsl(var(--muted-foreground))' },
+        border: 'hsl(var(--border))',
+      },
+    },
+  },
+  plugins: [require('tailwindcss-animate')],
+}`;
+
+      const packageJson = JSON.stringify({
+        name: slugify(project.name),
+        version: '1.0.0',
+        type: 'module',
+        scripts: {
+          dev: 'vite',
+          build: 'vite build',
+          preview: 'vite preview',
+          'server:dev': 'nodemon server/index.js',
+        },
+        dependencies: {
+          react: '^18.2.0',
+          'react-dom': '^18.2.0',
+          'react-router-dom': '^6.26.0',
+          'lucide-react': '^0.475.0',
+          express: '^4.18.2',
+          cors: '^2.8.5',
+          dotenv: '^16.0.0',
+          jsonwebtoken: '^9.0.0',
+          ...(dbStack === 'PostgreSQL' ? { pg: '^8.11.0' } : {}),
+          ...(dbStack === 'MongoDB' ? { mongoose: '^7.0.0' } : {}),
+        },
+        devDependencies: {
+          '@vitejs/plugin-react': '^4.2.1',
+          vite: '^5.0.0',
+          tailwindcss: '^3.4.0',
+          autoprefixer: '^10.4.17',
+          postcss: '^8.4.35',
+          nodemon: '^3.0.0',
+        },
+      }, null, 2);
+
       const code = {
-        backend: {
-          'src/index.js': backendCode?.index_js || '// Express entry point',
-          'src/routes/index.js': backendCode?.routes_js || '// Route handlers',
-          'src/middleware/auth.js': backendCode?.middleware_js || '// Middleware',
-          'src/automations/workflows.js': automationCode,
-        },
-        database: {
-          'db/schema.sql': dbCode?.schema_sql || '-- Schema',
-          'db/seed.sql': dbCode?.seed_sql || '-- Seeds',
-          'db/models.js': dbCode?.orm_models || '// ORM models',
-        },
-        frontend: {
-          'src/App.jsx': frontendCode?.app_router || '// Router',
-          'src/pages/Dashboard.jsx': frontendCode?.dashboard_page || '// Dashboard',
-          'src/components/Layout.jsx': frontendCode?.layout_component || '// Layout',
-        },
-        config: {
+        '⚙️ config': {
+          'package.json': packageJson,
+          'vite.config.js': viteConfig,
+          'tailwind.config.js': tailwindConfig,
+          'index.html': frontendCode?.index_html || `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${project.name}</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>`,
           '.env.example': envVars.join('\n'),
-          'package.json': JSON.stringify({
-            name: slugify(project.name),
-            version: '1.0.0',
-            scripts: { start: 'node src/index.js', dev: 'nodemon src/index.js', build: 'npm run build' },
-            dependencies: {
-              express: '^4.18.2',
-              cors: '^2.8.5',
-              dotenv: '^16.0.0',
-              jsonwebtoken: '^9.0.0',
-              ...(dbStack === 'PostgreSQL' ? { pg: '^8.11.0' } : {}),
-              ...(dbStack === 'MongoDB' ? { mongoose: '^7.0.0' } : {}),
-            },
-          }, null, 2),
+        },
+        '🎨 frontend/src': {
+          'main.jsx': frontendCode?.main_jsx || `import React from 'react'
+import ReactDOM from 'react-dom/client'
+import App from './App.jsx'
+import './index.css'
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+)`,
+          'App.jsx': frontendCode?.app_jsx || '// App router',
+          'index.css': frontendCode?.index_css || `@tailwind base;\n@tailwind components;\n@tailwind utilities;`,
+          'pages/Dashboard.jsx': frontendCode?.dashboard_page || '// Dashboard page',
+          'components/Layout.jsx': frontendCode?.layout_component || '// Layout component',
+        },
+        '🔧 backend/server': {
+          'index.js': backendCode?.index_js || '// Express entry point',
+          'routes/index.js': backendCode?.routes_js || '// Route handlers',
+          'middleware/auth.js': backendCode?.middleware_js || '// Middleware',
+          'automations/workflows.js': automationCode,
+        },
+        '🗄️ database': {
+          'schema.sql': dbCode?.schema_sql || '-- Schema',
+          'seed.sql': dbCode?.seed_sql || '-- Seeds',
+          'models.js': dbCode?.orm_models || '// ORM models',
         },
       };
 
@@ -350,10 +435,10 @@ Return ONLY a JSON object (no markdown):
       {/* Header */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-card/50 flex-shrink-0">
         <Zap className="w-4 h-4 text-primary" />
-        <h2 className="text-sm font-semibold text-foreground">Publish App</h2>
+        <h2 className="text-sm font-semibold text-foreground">Generate Code Package</h2>
         {isLive && (
-          <span className="flex items-center gap-1 text-[10px] bg-green-500/15 text-green-700 border border-green-300 px-2 py-0.5 rounded-full font-semibold">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> LIVE
+          <span className="flex items-center gap-1 text-[10px] bg-blue-500/15 text-blue-700 border border-blue-300 px-2 py-0.5 rounded-full font-semibold">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" /> GENERATED
           </span>
         )}
         <div className="flex-1" />
@@ -366,54 +451,59 @@ Return ONLY a JSON object (no markdown):
           {publishing
             ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
             : isLive ? <RefreshCw className="w-3.5 h-3.5" /> : <Zap className="w-3.5 h-3.5" />}
-          {publishing ? 'Publishing…' : isLive ? 'Republish' : 'Build & Publish'}
+          {publishing ? 'Generating…' : isLive ? 'Regenerate' : 'Generate Code'}
         </Button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
 
-        {/* Live URL card */}
+        {/* Info banner — always visible */}
+        <div className="bg-blue-500/8 border border-blue-300/40 rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 bg-blue-500/15 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+              <Terminal className="w-4 h-4 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-foreground mb-1">📦 This generates a downloadable code package</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                ArchitectAI generates your full app codebase — <span className="font-mono text-foreground">App.jsx</span>, <span className="font-mono text-foreground">index.html</span>, <span className="font-mono text-foreground">vite.config.js</span>, <span className="font-mono text-foreground">tailwind.config.js</span>, <span className="font-mono text-foreground">package.json</span>, backend API, database schema, and more. Copy the files and run them locally or deploy to <strong>Vercel, Netlify, Railway, or your own domain</strong>.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {['npm install', 'npm run dev', 'Deploy to Vercel/Netlify'].map(s => (
+                  <span key={s} className="text-[10px] font-mono bg-background border border-border px-2 py-0.5 rounded text-muted-foreground">{s}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Generated summary card */}
         {isLive && (
-          <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/5 border border-green-400/30 rounded-xl p-4">
+          <div className="bg-card border border-border rounded-xl p-4">
             <div className="flex items-center gap-2 mb-3">
-              <Globe className="w-5 h-5 text-green-600" />
-              <span className="text-sm font-bold text-green-800 dark:text-green-400">Your app is live!</span>
+              <Package className="w-4 h-4 text-primary" />
+              <span className="text-sm font-bold text-foreground">Code Package Ready</span>
               <span className="text-xs text-muted-foreground ml-auto">
-                Published {new Date(publishState.published_at).toLocaleDateString()}
+                Generated {new Date(publishState.published_at).toLocaleDateString()}
               </span>
             </div>
-            <div className="flex items-center gap-2 bg-background/60 border border-green-300/40 rounded-lg px-3 py-2">
-              <Globe className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
-              <span className="text-sm font-mono text-foreground flex-1 truncate">{publishState.url}</span>
-              <button
-                onClick={() => copyText(publishState.url, 'url')}
-                className="text-muted-foreground hover:text-foreground p-1 flex-shrink-0"
-              >
-                {copied === 'url' ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
-              </button>
-              <a href={publishState.url} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:text-green-700 p-1 flex-shrink-0">
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-            </div>
-            {/* Stats row */}
-            <div className="grid grid-cols-4 gap-2 mt-3">
+            <div className="grid grid-cols-4 gap-2">
               {[
                 { label: 'Entities', value: publishState.entities },
                 { label: 'Pages', value: publishState.pages },
                 { label: 'APIs', value: publishState.apis },
                 { label: 'Workflows', value: publishState.workflows },
               ].map(({ label, value }) => (
-                <div key={label} className="text-center">
+                <div key={label} className="text-center bg-muted/30 rounded-lg py-2">
                   <p className="text-lg font-bold text-foreground">{value}</p>
                   <p className="text-[10px] text-muted-foreground">{label}</p>
                 </div>
               ))}
             </div>
-            {/* Tech badges */}
             {publishState.tech_stack && (
               <div className="flex flex-wrap gap-1.5 mt-3">
                 {Object.values(publishState.tech_stack).map((t, i) => (
-                  <span key={i} className="text-[10px] bg-background/60 border border-border px-2 py-0.5 rounded-full text-muted-foreground">{t}</span>
+                  <span key={i} className="text-[10px] bg-muted border border-border px-2 py-0.5 rounded-full text-muted-foreground">{t}</span>
                 ))}
               </div>
             )}
@@ -491,15 +581,15 @@ Return ONLY a JSON object (no markdown):
             <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mb-4">
               <Zap className="w-8 h-8 text-primary" />
             </div>
-            <h3 className="font-semibold text-foreground mb-2">Build & Publish Your App</h3>
+            <h3 className="font-semibold text-foreground mb-2">Generate Your App Codebase</h3>
             <p className="text-sm text-muted-foreground max-w-md leading-relaxed mb-6">
-              AI generates your complete backend (API, database schema, workflows), frontend pages, and deploys everything under a live <span className="font-mono text-primary">*.base44.app</span> URL in minutes.
+              AI generates all your source files — <code className="text-primary">App.jsx</code>, <code className="text-primary">vite.config.js</code>, <code className="text-primary">tailwind.config.js</code>, backend API, database schema and more. Copy & deploy anywhere.
             </p>
             <div className="grid grid-cols-3 gap-3 mb-6 max-w-sm w-full">
               {[
-                { icon: Server, label: 'Backend API', desc: 'Auto-generated' },
+                { icon: Server, label: 'Backend API', desc: 'Express + routes' },
                 { icon: Database, label: 'Database', desc: 'Schema & seeds' },
-                { icon: Layout, label: 'Frontend', desc: 'All pages live' },
+                { icon: Layout, label: 'Frontend', desc: 'Vite + React + Tailwind' },
               ].map(({ icon: Icon, label, desc }) => (
                 <div key={label} className="bg-muted/30 border border-border rounded-lg p-3 text-center">
                   <Icon className="w-5 h-5 text-primary mx-auto mb-1.5" />
@@ -509,7 +599,7 @@ Return ONLY a JSON object (no markdown):
               ))}
             </div>
             <Button onClick={runPublish} className="gap-2">
-              <Zap className="w-4 h-4" /> Build & Publish App
+              <Zap className="w-4 h-4" /> Generate Code Package
             </Button>
           </div>
         ) : null}

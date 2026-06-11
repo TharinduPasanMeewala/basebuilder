@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { Globe, ArrowLeft, Database, Layout, Code, GitBranch, FileText, ExternalLink, Copy, Check, ChevronDown, ChevronRight, Terminal } from 'lucide-react';
+import { Package, ArrowLeft, Copy, Check, ChevronDown, ChevronRight, Terminal, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import ReactMarkdown from 'react-markdown';
 
 export default function PublishedApp() {
   const { id } = useParams();
@@ -48,23 +47,15 @@ export default function PublishedApp() {
   if (!project || !publishState) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-4">
-        <Globe className="w-12 h-12 text-muted-foreground" />
-        <h1 className="text-xl font-bold text-foreground">App not published yet</h1>
-        <p className="text-muted-foreground text-sm">Go back to the project workspace and click "Build & Publish".</p>
+        <Package className="w-12 h-12 text-muted-foreground" />
+        <h1 className="text-xl font-bold text-foreground">Code not generated yet</h1>
+        <p className="text-muted-foreground text-sm">Go back to the project workspace and click "Generate Code".</p>
         <Button onClick={() => navigate(`/projects/${id}`)}>
           <ArrowLeft className="w-4 h-4 mr-2" /> Back to Workspace
         </Button>
       </div>
     );
   }
-
-  const stats = [
-    { icon: FileText, label: 'Requirements', value: publishState.entities },
-    { icon: Database, label: 'Entities', value: publishState.entities },
-    { icon: Layout, label: 'Pages', value: publishState.pages },
-    { icon: Code, label: 'APIs', value: publishState.apis },
-    { icon: GitBranch, label: 'Workflows', value: publishState.workflows },
-  ];
 
   const codeToShow = publishState.code;
 
@@ -80,16 +71,16 @@ export default function PublishedApp() {
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-green-500/15 rounded-lg flex items-center justify-center">
-              <Globe className="w-4 h-4 text-green-600" />
+            <div className="w-7 h-7 bg-primary/15 rounded-lg flex items-center justify-center">
+              <Package className="w-4 h-4 text-primary" />
             </div>
             <span className="font-bold text-sm text-foreground">{project.name}</span>
-            <span className="flex items-center gap-1 text-[10px] bg-green-500/15 text-green-700 border border-green-300 px-2 py-0.5 rounded-full font-semibold">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> LIVE
+            <span className="flex items-center gap-1 text-[10px] bg-blue-500/15 text-blue-700 border border-blue-300 px-2 py-0.5 rounded-full font-semibold">
+              📦 CODE PACKAGE
             </span>
           </div>
           <span className="ml-auto text-xs text-muted-foreground hidden sm:block">
-            Published {new Date(publishState.published_at).toLocaleDateString()}
+            Generated {new Date(publishState.published_at).toLocaleDateString()}
           </span>
         </div>
       </div>
@@ -97,28 +88,42 @@ export default function PublishedApp() {
       <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
 
         {/* Hero */}
-        <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/5 border border-green-400/30 rounded-2xl p-6 text-center">
-          <div className="w-16 h-16 bg-green-500/15 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <Globe className="w-8 h-8 text-green-600" />
+        <div className="bg-gradient-to-br from-primary/8 to-primary/3 border border-primary/20 rounded-2xl p-6 text-center">
+          <div className="w-16 h-16 bg-primary/15 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <Package className="w-8 h-8 text-primary" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground mb-2">{project.name}</h1>
+          <h1 className="text-2xl font-bold text-foreground mb-1">{project.name}</h1>
+          <p className="text-xs text-blue-600 font-semibold mb-3">📦 Generated Code Package — Not a live hosted app</p>
           {project.description && (
             <p className="text-sm text-muted-foreground max-w-lg mx-auto mb-4">{project.description}</p>
           )}
           {publishState.tech_stack && (
-            <div className="flex flex-wrap gap-2 justify-center">
+            <div className="flex flex-wrap gap-2 justify-center mb-4">
               {Object.values(publishState.tech_stack).map((t, i) => (
                 <span key={i} className="text-xs bg-background/70 border border-border px-3 py-1 rounded-full text-muted-foreground">{t}</span>
               ))}
             </div>
           )}
+          <div className="bg-blue-500/10 border border-blue-200 rounded-xl p-3 text-left max-w-lg mx-auto">
+            <p className="text-xs font-semibold text-blue-800 mb-1 flex items-center gap-1.5"><Info className="w-3.5 h-3.5" /> How to run this app</p>
+            <ol className="text-xs text-blue-700 space-y-0.5 list-decimal list-inside">
+              <li>Copy all files below into a local project folder</li>
+              <li>Run <code className="font-mono bg-blue-100 px-1 rounded">npm install</code></li>
+              <li>Run <code className="font-mono bg-blue-100 px-1 rounded">npm run dev</code> to preview locally</li>
+              <li>Deploy to <strong>Vercel</strong>, <strong>Netlify</strong>, or your own domain</li>
+            </ol>
+          </div>
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-          {stats.map(({ icon: Icon, label, value }) => (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { label: 'Entities', value: publishState.entities },
+            { label: 'Pages', value: publishState.pages },
+            { label: 'APIs', value: publishState.apis },
+            { label: 'Workflows', value: publishState.workflows },
+          ].map(({ label, value }) => (
             <div key={label} className="bg-card border border-border rounded-xl p-4 text-center">
-              <Icon className="w-5 h-5 text-primary mx-auto mb-2" />
               <p className="text-2xl font-bold text-foreground">{value ?? 0}</p>
               <p className="text-xs text-muted-foreground">{label}</p>
             </div>
