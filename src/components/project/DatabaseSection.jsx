@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Wand2, Trash2, ChevronRight, ChevronDown, Database, Link } from 'lucide-react';
+import { Plus, Wand2, Trash2, ChevronRight, ChevronDown, Database, Link, LayoutGrid, List } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { useToast } from '@/components/ui/use-toast';
+import EntityMap from './EntityMap';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -21,6 +22,7 @@ export default function DatabaseSection({ project, onRefresh }) {
   const [showDialog, setShowDialog] = useState(false);
   const [editEntity, setEditEntity] = useState(null);
   const [form, setForm] = useState({ name: '', description: '', module: '', fields: [] });
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'map'
   const { toast } = useToast();
 
   useEffect(() => { loadEntities(); }, [project.id]);
@@ -182,6 +184,22 @@ Generate a comprehensive data model with 8-15 entities. Each entity MUST have at
         <h2 className="text-sm font-semibold text-foreground mr-2">Data Model</h2>
         <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{entities.length} entities</span>
         <div className="flex-1" />
+        {entities.length > 0 && (
+          <div className="flex items-center gap-0.5 bg-muted rounded-md p-0.5">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`h-6 w-6 rounded flex items-center justify-center transition-colors ${viewMode === 'list' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              <List className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setViewMode('map')}
+              className={`h-6 w-6 rounded flex items-center justify-center transition-colors ${viewMode === 'map' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
         <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" onClick={openAdd}>
           <Plus className="w-3.5 h-3.5" /> Add Entity
         </Button>
@@ -191,7 +209,11 @@ Generate a comprehensive data model with 8-15 entities. Each entity MUST have at
         </Button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-hidden relative">
+      {viewMode === 'map' && entities.length > 0 ? (
+        <EntityMap entities={entities} />
+      ) : (
+      <div className="h-full overflow-y-auto p-4">
         {loading ? (
           <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-14 bg-muted rounded-lg animate-pulse" />)}</div>
         ) : entities.length === 0 ? (
@@ -283,6 +305,8 @@ Generate a comprehensive data model with 8-15 entities. Each entity MUST have at
             ))}
           </div>
         )}
+      </div>
+      )}
       </div>
 
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
