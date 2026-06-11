@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { Package, ArrowLeft, Copy, Check, ChevronDown, ChevronRight, Terminal, Info } from 'lucide-react';
+import { Package, ArrowLeft, Copy, Check, ChevronDown, ChevronRight, Terminal, Info, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import JSZip from 'jszip';
 
 export default function PublishedApp() {
   const { id } = useParams();
@@ -36,6 +37,23 @@ export default function PublishedApp() {
 
   const toggleCode = (key) => setExpandedCode(e => ({ ...e, [key]: !e[key] }));
 
+  const downloadZip = async () => {
+    if (!codeToShow) return;
+    const zip = new JSZip();
+    Object.entries(codeToShow).forEach(([section, files]) => {
+      Object.entries(files).forEach(([filename, content]) => {
+        zip.file(`${section}/${filename}`, content || '');
+      });
+    });
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${project.name.replace(/\s+/g, '-').toLowerCase()}-code.zip`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -58,6 +76,7 @@ export default function PublishedApp() {
   }
 
   const codeToShow = publishState.code;
+
 
   return (
     <div className="min-h-screen bg-background">
@@ -136,7 +155,12 @@ export default function PublishedApp() {
             <div className="px-5 py-4 border-b border-border bg-muted/20 flex items-center gap-2">
               <Terminal className="w-4 h-4 text-primary" />
               <p className="text-sm font-semibold text-foreground">Generated Codebase</p>
-              <span className="text-xs text-muted-foreground ml-auto">Click to expand files</span>
+              <div className="ml-auto flex items-center gap-3">
+                <span className="text-xs text-muted-foreground hidden sm:block">Click to expand files</span>
+                <Button size="sm" className="h-7 text-xs gap-1.5" onClick={downloadZip}>
+                  <Download className="w-3.5 h-3.5" /> Download ZIP
+                </Button>
+              </div>
             </div>
             <div className="divide-y divide-border">
               {Object.entries(codeToShow).map(([section, files]) => (
