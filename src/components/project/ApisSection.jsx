@@ -39,33 +39,39 @@ export default function ApisSection({ project, onRefresh }) {
 
   const generateApis = async () => {
     setGenerating(true);
-    const entities = await base44.entities.DataEntity.filter({ project_id: project.id });
-    const entityNames = entities.map(e => e.name).join(', ');
+    try {
+      const entities = await base44.entities.DataEntity.filter({ project_id: project.id });
+      const entityNames = entities.map(e => e.name).join(', ');
 
-    const raw = await base44.integrations.Core.InvokeLLM({
-      prompt: `Design the REST API specification for a ${project.type?.replace(/_/g, ' ')} application called "${project.name}".
+      const raw = await base44.integrations.Core.InvokeLLM({
+        prompt: `Design a concise REST API specification for a ${project.type?.replace(/_/g, ' ')} application called "${project.name}".
 
 Data entities: ${entityNames || 'Not defined yet'}
 
-Generate a comprehensive REST API with CRUD operations for all entities, plus business-logic endpoints. Follow RESTful conventions.
-Return JSON like: {"endpoints":[{"name":"...","method":"GET|POST|PUT|PATCH|DELETE","path":"/api/...","description":"...","module":"...","auth_required":true,"roles":[],"tags":[]}]}`,
-      model: 'claude_sonnet_4_6',
-    });
+Generate the most important REST endpoints (max 15) covering core CRUD and key business logic. Follow RESTful conventions.
+Return plain JSON only, no markdown: {"endpoints":[{"name":"...","method":"GET|POST|PUT|PATCH|DELETE","path":"/api/...","description":"...","module":"...","auth_required":true,"roles":[],"tags":[]}]}`,
+      });
 
-    let eps = [];
-    try {
-      const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      const result = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
-      eps = Array.isArray(result) ? result : (result?.endpoints || []);
-    } catch { eps = []; }
+      let eps = [];
+      try {
+        const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        const start = cleaned.indexOf('{');
+        const end = cleaned.lastIndexOf('}');
+        const result = JSON.parse(cleaned.slice(start, end + 1));
+        eps = Array.isArray(result) ? result : (result?.endpoints || []);
+      } catch { eps = []; }
 
-    for (const e of eps) {
-      await base44.entities.ApiEndpoint.create({ project_id: project.id, ...e, source: 'ai_generated' });
+      if (eps.length > 0) {
+        await base44.entities.ApiEndpoint.bulkCreate(
+          eps.map(e => ({ project_id: project.id, ...e, source: 'ai_generated' }))
+        );
+      }
+      await loadEndpoints();
+      await base44.entities.Project.update(project.id, { phase: 'review', completeness_score: 80 });
+      onRefresh();
+    } finally {
+      setGenerating(false);
     }
-    await loadEndpoints();
-    await base44.entities.Project.update(project.id, { phase: 'review', completeness_score: 80 });
-    onRefresh();
-    setGenerating(false);
   };
 
   const toggleExpanded = (id) => setExpanded(e => ({ ...e, [id]: !e[id] }));
