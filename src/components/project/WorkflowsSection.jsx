@@ -41,37 +41,51 @@ export default function WorkflowsSection({ project, onRefresh }) {
 
   const generateWorkflows = async () => {
     setGenerating(true);
-    const [entities, reqs] = await Promise.all([
-      base44.entities.DataEntity.filter({ project_id: project.id }),
-      base44.entities.Requirement.filter({ project_id: project.id }),
-    ]);
-    const entityNames = entities.map(e => e.name).join(', ');
+    try {
+      const [entities, reqs] = await Promise.all([
+        base44.entities.DataEntity.filter({ project_id: project.id }),
+        base44.entities.Requirement.filter({ project_id: project.id }),
+      ]);
+      const entityNames = entities.map(e => e.name).join(', ');
 
-    const raw = await base44.integrations.Core.InvokeLLM({
-      prompt: `Design business workflows and automations for a ${project.type?.replace(/_/g, ' ')} application called "${project.name}".
+      const raw = await base44.integrations.Core.InvokeLLM({
+        prompt: `Design business workflows and automations for a ${project.type?.replace(/_/g, ' ')} application called "${project.name}".
 
 Data entities: ${entityNames || 'Not defined yet'}
 Requirements: ${reqs.slice(0, 10).map(r => r.title).join(', ') || 'Not defined yet'}
 
 Generate 6-10 key business workflows including status flows, approval processes, notifications, and automations.
-Return JSON like: {"workflows":[{"name":"...","description":"...","trigger":"...","trigger_type":"entity_create|entity_update|entity_delete|scheduled|manual|api_call|event","module":"...","steps":[{"order":1,"name":"...","description":"..."}],"status_flow":[{"from":"...","to":"...","condition":"..."}]}]}`,
-      model: 'claude_sonnet_4_6',
-    });
 
-    let wfs = [];
-    try {
-      const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      const result = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
-      wfs = Array.isArray(result) ? result : (result?.workflows || []);
-    } catch { wfs = []; }
+IMPORTANT: Respond with ONLY a valid JSON object, no markdown, no explanation. Format:
+{"workflows":[{"name":"Order Created","description":"...","trigger":"When order is placed","trigger_type":"entity_create","module":"Orders","steps":[{"order":1,"name":"Validate Order","description":"Check inventory"}],"status_flow":[{"from":"pending","to":"confirmed","condition":"payment received"}]}]}`,
+        model: 'claude_sonnet_4_6',
+      });
 
-    for (const w of wfs) {
-      await base44.entities.WorkflowSpec.create({ project_id: project.id, ...w, source: 'ai_generated' });
+      let wfs = [];
+      try {
+        // Strip markdown code fences if present
+        const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        const jsonStart = cleaned.indexOf('{');
+        const jsonEnd = cleaned.lastIndexOf('}');
+        const jsonStr = jsonStart !== -1 && jsonEnd !== -1 ? cleaned.slice(jsonStart, jsonEnd + 1) : cleaned;
+        const result = JSON.parse(jsonStr);
+        wfs = result?.workflows || [];
+      } catch (e) {
+        console.error('Workflow JSON parse failed:', e, raw?.slice(0, 200));
+        wfs = [];
+      }
+
+      for (const w of wfs) {
+        await base44.entities.WorkflowSpec.create({ project_id: project.id, ...w, source: 'ai_generated' });
+      }
+      await loadWorkflows();
+      await base44.entities.Project.update(project.id, { phase: 'architecture', completeness_score: 65 });
+      onRefresh();
+    } catch (e) {
+      console.error('Workflow generation failed:', e);
+    } finally {
+      setGenerating(false);
     }
-    await loadWorkflows();
-    await base44.entities.Project.update(project.id, { phase: 'architecture', completeness_score: 65 });
-    onRefresh();
-    setGenerating(false);
   };
 
   const toggleExpanded = (id) => setExpanded(e => ({ ...e, [id]: !e[id] }));
