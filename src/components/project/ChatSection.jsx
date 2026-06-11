@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, Sparkles, FileText } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Send, Sparkles, FileText, Users, ChevronDown } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
@@ -18,127 +18,145 @@ const AGENT_SEQUENCE = [
   'qa_architect',
 ];
 
-const PHASE_AGENT_MAP = {
-  discovery: 'business_analyst',
-  analysis: 'product_manager',
-  design: 'ui_ux_architect',
-  architecture: 'solution_architect',
-  review: 'qa_architect',
-  generation: 'qa_architect',
-  completed: 'qa_architect',
+const AGENT_NAMES = {
+  business_analyst: 'Alex (BA)',
+  product_manager: 'Morgan (PM)',
+  solution_architect: 'Jordan (SA)',
+  db_architect: 'Riley (DBA)',
+  ui_ux_architect: 'Casey (UI/UX)',
+  backend_architect: 'Taylor (Backend)',
+  qa_architect: 'Sam (QA)',
 };
-
-function buildSystemPrompt(project, agentType) {
-  const agentDescriptions = {
-    business_analyst: `You are a senior Business Analyst AI agent named "Alex". Your role is to conduct a thorough requirements discovery for a ${project.type?.replace(/_/g, ' ')} application called "${project.name}".
-
-Ask ONE focused question at a time. Gather requirements across these areas progressively:
-1. Business purpose and goals
-2. Target users and their roles
-3. Key business processes and workflows
-4. Data the system needs to track
-5. Reports and dashboards needed
-6. Integrations with other systems
-7. Security and compliance requirements
-
-Be conversational, professional, and thorough. After collecting sufficient information (about 8-10 exchanges), summarize what you've learned and suggest moving to the Analysis phase.
-
-Current project: ${project.name} (${project.type?.replace(/_/g, ' ')})
-Industry: ${project.industry || 'Not specified'}`,
-
-    product_manager: `You are a senior Product Manager AI agent named "Morgan". Based on the requirements gathered, generate a structured analysis.
-
-When the user asks you to analyze or generate requirements, produce:
-- Executive Summary
-- Business Objectives (3-5 bullet points)
-- User Personas (2-4 personas with name, role, and goals)
-- Functional Requirements (grouped by module, numbered)
-- Non-Functional Requirements (performance, security, scalability)
-- User Stories (format: "As a [persona], I want to [action] so that [benefit]")
-
-Format everything clearly with markdown headings. Be detailed and professional.`,
-
-    solution_architect: `You are a senior Solution Architect AI agent named "Jordan". Design the system architecture for this application.
-
-When asked, generate:
-- System Architecture Overview
-- Application Modules (with descriptions)
-- Technology Stack Recommendations
-- Integration Architecture
-- Security Architecture
-- Scalability Considerations
-
-Use clear markdown formatting with sections and bullet points.`,
-
-    db_architect: `You are a senior Database Architect AI agent named "Riley". Design the data model for this application.
-
-When asked, generate database entities in this JSON format and also explain each entity:
-- Entity Name
-- Fields (name, type, required, description, constraints)
-- Relationships to other entities
-- Key indexes
-
-Always present the schema as structured JSON code blocks AND human-readable explanations.`,
-
-    ui_ux_architect: `You are a senior UI/UX Architect AI agent named "Casey". Design the user interface structure for this application.
-
-When asked, generate:
-- Navigation Structure (main menu, sub-menus)
-- Page Inventory (list all pages with type and purpose)
-- Key User Flows (step-by-step)
-- Dashboard Layout Descriptions
-- Form Specifications for key forms
-- Mobile Considerations
-
-Be specific about page types (dashboard, list, detail, form, report).`,
-
-    backend_architect: `You are a senior Backend Architect AI agent named "Taylor". Design the backend architecture for this application.
-
-When asked, generate:
-- API Endpoint Specifications (method, path, description, request/response)
-- Business Workflow Descriptions
-- Automation Rules
-- Notification Triggers
-- Status Flow Diagrams (as text)
-- Integration Specifications
-
-Format API endpoints clearly with HTTP methods and example request/response schemas.`,
-
-    qa_architect: `You are a senior QA Architect AI agent named "Sam". Review the complete application specification for completeness and quality.
-
-When asked to review, check for:
-- Missing functional requirements
-- Unspecified user roles or permissions
-- Data model gaps
-- Missing API endpoints
-- Undefined workflows
-- Security considerations not addressed
-- Performance requirements not specified
-
-Provide a completeness score (0-100%) and a prioritized list of gaps to address. Be thorough and constructive.`,
-  };
-
-  return agentDescriptions[agentType] || agentDescriptions.business_analyst;
-}
 
 const VALID_CATEGORIES = ['functional', 'non_functional', 'business_rule', 'user_story', 'constraint', 'assumption'];
 const VALID_PRIORITIES = ['critical', 'high', 'medium', 'low'];
 
+// Build a rich cross-agent context so every agent knows what others have said/decided
+async function buildCrossAgentContext(project) {
+  const [convos, reqs, entities, pages, workflows, apis] = await Promise.all([
+    base44.entities.Conversation.filter({ project_id: project.id }),
+    base44.entities.Requirement.filter({ project_id: project.id }),
+    base44.entities.DataEntity.filter({ project_id: project.id }),
+    base44.entities.PageSpec.filter({ project_id: project.id }),
+    base44.entities.WorkflowSpec.filter({ project_id: project.id }),
+    base44.entities.ApiEndpoint.filter({ project_id: project.id }),
+  ]);
+
+  // Summarize what each agent has contributed so far
+  const agentOutputs = {};
+  convos.forEach(c => {
+    const agentMsgs = (c.messages || [])
+      .filter(m => m.role === 'assistant')
+      .slice(-3)
+      .map(m => m.content?.slice(0, 500))
+      .join('\n');
+    if (agentMsgs && c.agent_type) {
+      agentOutputs[c.agent_type] = agentMsgs;
+    }
+  });
+
+  let ctx = `\n\n=== SHARED PROJECT KNOWLEDGE (from all agents) ===\n`;
+  ctx += `Project: "${project.name}" | Type: ${project.type?.replace(/_/g, ' ')} | Industry: ${project.industry || 'Not specified'}\n`;
+
+  if (reqs.length > 0) {
+    ctx += `\n--- Requirements (${reqs.length} captured by BA/PM) ---\n`;
+    reqs.slice(0, 20).forEach(r => {
+      ctx += `• [${r.category}] ${r.title}: ${r.description?.slice(0, 120) || ''}\n`;
+    });
+  }
+
+  if (entities.length > 0) {
+    ctx += `\n--- Data Entities (${entities.length} designed by DB Architect) ---\n`;
+    entities.slice(0, 15).forEach(e => {
+      const fields = (e.fields || []).map(f => `${f.name}:${f.type}`).join(', ');
+      ctx += `• ${e.name} [${e.module || 'General'}]: ${fields.slice(0, 150)}\n`;
+      if (e.relationships?.length > 0) {
+        ctx += `  Relations: ${e.relationships.map(r => `${r.type} → ${r.related_entity}`).join(', ')}\n`;
+      }
+    });
+  }
+
+  if (pages.length > 0) {
+    ctx += `\n--- UI Pages (${pages.length} designed by UI/UX Architect) ---\n`;
+    pages.slice(0, 12).forEach(p => {
+      ctx += `• ${p.name} [${p.type}] - ${p.route || ''}: ${p.description?.slice(0, 100) || ''}\n`;
+    });
+  }
+
+  if (workflows.length > 0) {
+    ctx += `\n--- Workflows (${workflows.length} defined by Backend Architect) ---\n`;
+    workflows.slice(0, 8).forEach(w => {
+      ctx += `• ${w.name}: ${w.description?.slice(0, 100) || ''}\n`;
+    });
+  }
+
+  if (apis.length > 0) {
+    ctx += `\n--- API Endpoints (${apis.length} defined) ---\n`;
+    apis.slice(0, 10).forEach(a => {
+      ctx += `• ${a.method} ${a.path}: ${a.description?.slice(0, 80) || ''}\n`;
+    });
+  }
+
+  // Add what other agents have said
+  Object.entries(agentOutputs).forEach(([agent, output]) => {
+    if (output) {
+      ctx += `\n--- ${AGENT_NAMES[agent] || agent} recent analysis ---\n${output}\n`;
+    }
+  });
+
+  ctx += `\n=== END SHARED KNOWLEDGE ===\n`;
+  return ctx;
+}
+
+function buildSystemPrompt(project, agentType, crossAgentContext) {
+  const basePrompt = {
+    business_analyst: `You are "Alex", a senior Business Analyst in a team of AI architects collaborating to design a ${project.type?.replace(/_/g, ' ')} called "${project.name}".
+
+Your role: Discover and refine business requirements through conversation. Ask ONE focused question at a time. Build on what other agents have already identified. After 8-10 exchanges, summarize findings and suggest the PM agent (Morgan) can now analyze them.
+
+IMPORTANT: Reference other agents' work when relevant (e.g., "Riley's data model shows X, which aligns with your requirement for Y").`,
+
+    product_manager: `You are "Morgan", a senior Product Manager in a team of AI architects collaborating to design a ${project.type?.replace(/_/g, ' ')} called "${project.name}".
+
+Your role: Analyze requirements gathered by Alex (BA) and produce structured PRD content — personas, user stories, prioritized features. Reference the data model from Riley (DBA) and pages from Casey (UI/UX) when available. Format output clearly with markdown.`,
+
+    solution_architect: `You are "Jordan", a senior Solution Architect in a team of AI architects collaborating to design a ${project.type?.replace(/_/g, ' ')} called "${project.name}".
+
+Your role: Define the system architecture — modules, tech stack, integrations, scalability. Build on Alex's requirements, Morgan's PRD, and Riley's data model. Reference what other agents have designed and add architectural reasoning.`,
+
+    db_architect: `You are "Riley", a senior Database Architect in a team of AI architects collaborating to design a ${project.type?.replace(/_/g, ' ')} called "${project.name}".
+
+Your role: Design the complete data model. Use the requirements from Alex (BA), feature list from Morgan (PM), and architecture from Jordan (SA) to create comprehensive database entities with fields, types, constraints, relationships and indexes.
+
+When generating a schema, output structured JSON code blocks AND plain-English explanations for each entity. Reference business requirements explicitly (e.g., "This entity supports the requirement: user tracking").
+
+Always be specific about field types: string, text, number, integer, boolean, date, datetime, json, array, email, url, enum.`,
+
+    ui_ux_architect: `You are "Casey", a senior UI/UX Architect in a team of AI architects collaborating to design a ${project.type?.replace(/_/g, ' ')} called "${project.name}".
+
+Your role: Design the complete UI structure — pages, navigation, user flows, forms. Reference Riley's data model to ensure every entity has appropriate CRUD pages. Reference Morgan's user personas to tailor UX decisions.`,
+
+    backend_architect: `You are "Taylor", a senior Backend Architect in a team of AI architects collaborating to design a ${project.type?.replace(/_/g, ' ')} called "${project.name}".
+
+Your role: Design APIs, workflows, automation rules, and backend logic. Reference Riley's data model for endpoint design, Casey's pages for API consumption patterns, and Jordan's architecture for infrastructure decisions.`,
+
+    qa_architect: `You are "Sam", a senior QA Architect in a team of AI architects collaborating to design a ${project.type?.replace(/_/g, ' ')} called "${project.name}".
+
+Your role: Review the ENTIRE specification across all agents — find gaps, inconsistencies, and missing elements. Score completeness (0-100%) and give actionable feedback. Be constructive and specific, referencing what each agent produced.`,
+  };
+
+  const prompt = basePrompt[agentType] || basePrompt.business_analyst;
+  return prompt + (crossAgentContext || '');
+}
+
 async function extractRequirementsInBackground(project, userMsg, assistantMsg) {
   try {
-    const prompt = `You are a requirements extraction engine. Analyze this conversation exchange and extract any concrete software requirements mentioned or implied.
-
-PROJECT: "${project.name}" (${project.type?.replace(/_/g, ' ')})
-
-USER SAID: ${userMsg}
-
-ASSISTANT RESPONDED: ${assistantMsg}
-
-Extract only CONCRETE, ACTIONABLE requirements from this exchange. If there are none, return an empty array.
-Each requirement must have: title (short, clear), description (detailed), category (one of: functional, non_functional, business_rule, user_story, constraint, assumption), priority (one of: critical, high, medium, low), module (logical area e.g. "Authentication", "Inventory"), acceptance_criteria.`;
-
     const result = await base44.integrations.Core.InvokeLLM({
-      prompt,
+      prompt: `Requirements extraction engine. Extract concrete software requirements from this exchange.
+PROJECT: "${project.name}" (${project.type?.replace(/_/g, ' ')})
+USER: ${userMsg}
+AI RESPONSE: ${assistantMsg}
+Return only CONCRETE, ACTIONABLE requirements. Empty array if none.`,
       response_json_schema: {
         type: 'object',
         properties: {
@@ -152,27 +170,25 @@ Each requirement must have: title (short, clear), description (detailed), catego
                 category: { type: 'string' },
                 priority: { type: 'string' },
                 module: { type: 'string' },
-                acceptance_criteria: { type: 'string' }
-              }
-            }
-          }
-        }
-      }
+                acceptance_criteria: { type: 'string' },
+              },
+            },
+          },
+        },
+      },
     });
 
     const reqs = result?.requirements || [];
     if (reqs.length === 0) return 0;
 
-    // Fetch existing to avoid duplication (by title)
     const existing = await base44.entities.Requirement.filter({ project_id: project.id });
     const existingTitles = new Set(existing.map(r => r.title?.toLowerCase().trim()));
-
     const newReqs = reqs.filter(r => r.title && !existingTitles.has(r.title.toLowerCase().trim()));
     if (newReqs.length === 0) return 0;
 
-    const maxIndex = existing.length;
-    await base44.entities.Requirement.bulkCreate(
-      newReqs.map((r, i) => ({
+    for (let i = 0; i < newReqs.length; i++) {
+      const r = newReqs[i];
+      await base44.entities.Requirement.create({
         project_id: project.id,
         title: r.title,
         description: r.description || '',
@@ -182,12 +198,11 @@ Each requirement must have: title (short, clear), description (detailed), catego
         acceptance_criteria: r.acceptance_criteria || '',
         status: 'draft',
         source: 'ai_generated',
-        order_index: maxIndex + i,
-      }))
-    );
+        order_index: existing.length + i,
+      });
+    }
     return newReqs.length;
   } catch (e) {
-    // Silent — background process, don't interrupt chat
     console.warn('Background requirement extraction failed:', e);
     return 0;
   }
@@ -200,41 +215,38 @@ export default function ChatSection({ project, onRefresh }) {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [extracting, setExtracting] = useState(false);
-  const [activeAgent, setActiveAgent] = useState(PHASE_AGENT_MAP[project.phase] || 'business_analyst');
+  const [activeAgent, setActiveAgent] = useState('business_analyst');
+  const [showAgentMenu, setShowAgentMenu] = useState(false);
   const messagesEndRef = useRef(null);
-  const textareaRef = useRef(null);
   const projectRef = useRef(project);
   useEffect(() => { projectRef.current = project; }, [project]);
   const { toast } = useToast();
 
-  useEffect(() => {
-    loadOrCreateConversation();
-  }, [project.id]);
-
+  useEffect(() => { loadOrCreateConversation(); }, [project.id]);
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, sending]);
 
   const loadOrCreateConversation = async () => {
     setLoading(true);
-    const convos = await base44.entities.Conversation.filter({ project_id: project.id, section: 'discovery' }, '-created_date', 1);
+    const convos = await base44.entities.Conversation.filter(
+      { project_id: project.id, section: 'discovery' }, '-created_date', 1
+    );
     if (convos.length > 0) {
       setConversation(convos[0]);
       setMessages(convos[0].messages || []);
       if (convos[0].agent_type) setActiveAgent(convos[0].agent_type);
     } else {
-      // Create new conversation and send initial greeting
       const convo = await base44.entities.Conversation.create({
         project_id: project.id,
         section: 'discovery',
-        agent_type: activeAgent,
-        title: 'Requirements Discovery',
+        agent_type: 'business_analyst',
+        title: 'Multi-Agent Design Session',
         messages: [],
         status: 'active',
       });
       setConversation(convo);
       setMessages([]);
-      // Auto-greet
       await sendInitialGreeting(convo);
     }
     setLoading(false);
@@ -242,24 +254,20 @@ export default function ChatSection({ project, onRefresh }) {
 
   const sendInitialGreeting = async (convo) => {
     setSending(true);
-    const greetingPrompt = `Introduce yourself briefly as the Business Analyst agent and ask the first discovery question for this project: "${project.name}" which is a ${project.type?.replace(/_/g, ' ')}${project.description ? `. Context: ${project.description}` : ''}. Start the requirements discovery process.`;
-
     const response = await base44.integrations.Core.InvokeLLM({
-      prompt: greetingPrompt,
+      prompt: `You are "Alex", a senior Business Analyst. Introduce yourself briefly and start requirements discovery for "${project.name}" (a ${project.type?.replace(/_/g, ' ')}${project.description ? ` — ${project.description}` : ''}). Mention that a full team of specialist agents (PM, Solution Architect, DB Architect, UI/UX, Backend, QA) will collaborate on this project. Ask the first discovery question.`,
       model: 'claude_sonnet_4_6',
     });
 
-    const assistantMsg = {
+    const msg = {
       id: Date.now().toString(),
       role: 'assistant',
       agent_type: 'business_analyst',
       content: response,
       timestamp: new Date().toISOString(),
     };
-
-    const updated = [assistantMsg];
-    await base44.entities.Conversation.update(convo.id, { messages: updated });
-    setMessages(updated);
+    await base44.entities.Conversation.update(convo.id, { messages: [msg] });
+    setMessages([msg]);
     setSending(false);
   };
 
@@ -278,16 +286,22 @@ export default function ChatSection({ project, onRefresh }) {
     setInput('');
     setSending(true);
 
-    // Build conversation history for context
-    const history = updatedMessages.slice(-10).map(m => `${m.role === 'user' ? 'User' : 'AI'}: ${m.content}`).join('\n\n');
-    const systemPrompt = buildSystemPrompt(project, activeAgent);
+    // Fetch full cross-agent context (what all other agents know)
+    const crossAgentContext = await buildCrossAgentContext(projectRef.current);
+    const systemPrompt = buildSystemPrompt(projectRef.current, activeAgent, crossAgentContext);
+
+    // Recent conversation history (last 12 messages)
+    const history = updatedMessages
+      .slice(-12)
+      .map(m => `${m.role === 'user' ? 'User' : AGENT_NAMES[m.agent_type] || 'AI'}: ${m.content}`)
+      .join('\n\n');
 
     const prompt = `${systemPrompt}
 
-CONVERSATION HISTORY:
+CURRENT CONVERSATION:
 ${history}
 
-Respond to the user's latest message as the ${activeAgent.replace(/_/g, ' ')} agent. Be helpful, professional, and move the conversation forward productively. Use markdown formatting for structured content.`;
+Respond as ${AGENT_NAMES[activeAgent]}. Be professional, specific, and reference the shared project knowledge when relevant. Use markdown for structured content.`;
 
     const response = await base44.integrations.Core.InvokeLLM({
       prompt,
@@ -303,34 +317,79 @@ Respond to the user's latest message as the ${activeAgent.replace(/_/g, ' ')} ag
     };
 
     const finalMessages = [...updatedMessages, assistantMsg];
-    await base44.entities.Conversation.update(conversation.id, { messages: finalMessages, agent_type: activeAgent });
+    await base44.entities.Conversation.update(conversation.id, {
+      messages: finalMessages,
+      agent_type: activeAgent,
+    });
     setMessages(finalMessages);
     setSending(false);
 
-    // Background: silently extract requirements from this exchange
+    // Background requirement extraction
     setExtracting(true);
-    extractRequirementsInBackground(projectRef.current, userMsg.content, response).then((count) => {
-      if (count > 0) {
-        toast({
-          title: `${count} requirement${count > 1 ? 's' : ''} captured`,
-          description: 'Automatically extracted from your conversation.',
-          duration: 3000,
-        });
-      }
-    }).finally(() => setExtracting(false));
+    extractRequirementsInBackground(projectRef.current, userMsg.content, response)
+      .then(count => {
+        if (count > 0) {
+          toast({
+            title: `${count} requirement${count > 1 ? 's' : ''} captured`,
+            description: 'Auto-extracted from conversation.',
+            duration: 3000,
+          });
+        }
+      })
+      .finally(() => setExtracting(false));
   };
 
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
+  // Ask another agent to chime in on the last message
+  const askAgentToDiscuss = async (agentType) => {
+    if (sending || messages.length === 0) return;
+    setShowAgentMenu(false);
+
+    const lastFewMessages = messages.slice(-6).map(m =>
+      `${m.role === 'user' ? 'User' : AGENT_NAMES[m.agent_type] || 'AI'}: ${m.content}`
+    ).join('\n\n');
+
+    setSending(true);
+    const crossAgentContext = await buildCrossAgentContext(projectRef.current);
+    const systemPrompt = buildSystemPrompt(projectRef.current, agentType, crossAgentContext);
+
+    const prompt = `${systemPrompt}
+
+RECENT CONVERSATION (between user and other agents):
+${lastFewMessages}
+
+As ${AGENT_NAMES[agentType]}, add your perspective on the discussion above. Reference your domain expertise and what the other agents have said. Keep it focused and valuable (3-6 sentences or a short structured list). You may agree, extend, or respectfully challenge points made by other agents.`;
+
+    const response = await base44.integrations.Core.InvokeLLM({
+      prompt,
+      model: 'claude_sonnet_4_6',
+    });
+
+    const agentMsg = {
+      id: Date.now().toString(),
+      role: 'assistant',
+      agent_type: agentType,
+      content: response,
+      timestamp: new Date().toISOString(),
+    };
+
+    const finalMessages = [...messages, agentMsg];
+    await base44.entities.Conversation.update(conversation.id, { messages: finalMessages });
+    setMessages(finalMessages);
+    setActiveAgent(agentType);
+    setSending(false);
   };
 
   const switchAgent = async (agentType) => {
     setActiveAgent(agentType);
     if (conversation) {
       await base44.entities.Conversation.update(conversation.id, { agent_type: agentType });
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
     }
   };
 
@@ -348,37 +407,73 @@ Respond to the user's latest message as the ${activeAgent.replace(/_/g, ' ')} ag
   return (
     <div className="flex flex-col flex-1 overflow-hidden h-full">
       {/* Agent selector bar */}
-      <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-card/50 overflow-x-auto flex-shrink-0">
-        <span className="text-xs text-muted-foreground whitespace-nowrap mr-1">Active Agent:</span>
+      <div className="flex items-center gap-1.5 px-3 py-2 border-b border-border bg-card/50 overflow-x-auto flex-shrink-0">
+        <span className="text-xs text-muted-foreground whitespace-nowrap mr-1">Reply as:</span>
         {AGENT_SEQUENCE.map(agentType => (
           <button
             key={agentType}
             onClick={() => switchAgent(agentType)}
-            className={`flex-shrink-0 transition-all ${activeAgent === agentType ? 'opacity-100' : 'opacity-40 hover:opacity-70'}`}
+            title={AGENTS[agentType]?.label}
+            className={`flex-shrink-0 transition-all rounded-full ${
+              activeAgent === agentType
+                ? 'ring-2 ring-primary ring-offset-1 opacity-100'
+                : 'opacity-40 hover:opacity-70'
+            }`}
           >
             <AgentBadge agentType={agentType} size="sm" showLabel={false} />
           </button>
         ))}
+
         <div className="ml-auto flex-shrink-0 flex items-center gap-2">
           {extracting && (
             <span className="flex items-center gap-1 text-xs text-muted-foreground animate-pulse">
               <FileText className="w-3 h-3" />
-              capturing requirements...
+              <span className="hidden sm:inline">capturing...</span>
             </span>
           )}
+
+          {/* "Ask agent to discuss" button */}
+          <div className="relative">
+            <button
+              onClick={() => setShowAgentMenu(v => !v)}
+              disabled={sending || messages.length === 0}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40 border border-border rounded-md px-2 py-1 transition-colors"
+              title="Ask another agent to weigh in"
+            >
+              <Users className="w-3 h-3" />
+              <span>Ask agent</span>
+              <ChevronDown className="w-3 h-3" />
+            </button>
+            {showAgentMenu && (
+              <div className="absolute right-0 top-8 z-50 bg-card border border-border rounded-lg shadow-lg p-2 min-w-[180px]">
+                <p className="text-xs text-muted-foreground px-2 pb-1.5 border-b border-border mb-1">Ask to weigh in:</p>
+                {AGENT_SEQUENCE.filter(a => a !== activeAgent).map(agentType => (
+                  <button
+                    key={agentType}
+                    onClick={() => askAgentToDiscuss(agentType)}
+                    className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md hover:bg-muted text-xs text-left transition-colors"
+                  >
+                    <AgentBadge agentType={agentType} size="sm" showLabel={false} />
+                    <span>{AGENT_NAMES[agentType]}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           <AgentBadge agentType={activeAgent} size="sm" showLabel={true} />
         </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-0">
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-0" onClick={() => setShowAgentMenu(false)}>
         {messages.length === 0 && !sending && (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
               <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-3">
                 <Sparkles className="w-6 h-6 text-primary" />
               </div>
-              <p className="text-sm font-medium text-foreground">Starting conversation...</p>
+              <p className="text-sm font-medium text-foreground">Starting multi-agent session...</p>
             </div>
           </div>
         )}
@@ -392,14 +487,13 @@ Respond to the user's latest message as the ${activeAgent.replace(/_/g, ' ')} ag
       {/* Input */}
       <div className="border-t border-border p-4 bg-card flex-shrink-0">
         <div className="flex gap-2 items-end">
-          <div className="flex-1 relative">
+          <div className="flex-1">
             <Textarea
-              ref={textareaRef}
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={`Message ${AGENTS[activeAgent]?.label || 'AI'}... (Enter to send)`}
-              className="resize-none min-h-[44px] max-h-32 text-sm pr-3 py-3"
+              className="resize-none min-h-[44px] max-h-32 text-sm py-3"
               rows={1}
             />
           </div>
@@ -413,7 +507,7 @@ Respond to the user's latest message as the ${activeAgent.replace(/_/g, ' ')} ag
           </Button>
         </div>
         <p className="text-xs text-muted-foreground mt-2 text-center">
-          Shift+Enter for new line · Enter to send
+          Select agent above · "Ask agent" to invite another · Shift+Enter for new line
         </p>
       </div>
     </div>
