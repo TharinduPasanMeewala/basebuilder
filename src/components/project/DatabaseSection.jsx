@@ -211,7 +211,14 @@ Generate a comprehensive data model with 8-15 entities. Each entity MUST have at
 
       <div className="flex-1 overflow-hidden relative">
       {viewMode === 'map' && entities.length > 0 ? (
-        <EntityMap entities={entities} />
+        <EntityMap
+          entities={entities}
+          onEntityUpdate={async (id, changes) => {
+            await base44.entities.DataEntity.update(id, changes);
+            await loadEntities();
+            toast({ title: 'Entity updated', duration: 2000 });
+          }}
+        />
       ) : (
       <div className="h-full overflow-y-auto p-4">
         {loading ? (

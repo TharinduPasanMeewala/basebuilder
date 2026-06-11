@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { Database, X, Link } from 'lucide-react';
+import { X, Link, Plus, Trash2, Check, Pencil } from 'lucide-react';
 
 const MODULE_COLORS = [
   { bg: '#6366f1', light: '#eef2ff', border: '#a5b4fc' },
@@ -12,11 +12,8 @@ const MODULE_COLORS = [
   { bg: '#14b8a6', light: '#f0fdfa', border: '#5eead4' },
 ];
 
-const REL_LABELS = {
-  one_to_one: '1:1',
-  one_to_many: '1:N',
-  many_to_many: 'N:M',
-};
+const REL_LABELS = { one_to_one: '1:1', one_to_many: '1:N', many_to_many: 'N:M' };
+const FIELD_TYPES = ['string', 'text', 'number', 'integer', 'boolean', 'date', 'datetime', 'json', 'array', 'file', 'email', 'url', 'enum'];
 
 const NODE_W = 180;
 const NODE_H_BASE = 52;
@@ -38,11 +35,145 @@ function layoutNodes(entities) {
   }));
 }
 
-export default function EntityMap({ entities }) {
+// Inline field editor panel (rendered as HTML overlay, not SVG)
+function EntityEditPanel({ entity, color, onClose, onSave }) {
+  const [fields, setFields] = useState(entity.fields ? JSON.parse(JSON.stringify(entity.fields)) : []);
+  const [saving, setSaving] = useState(false);
+
+  const addField = () => {
+    setFields(f => [...f, { name: '', type: 'string', required: false, description: '' }]);
+  };
+
+  const updateField = (i, key, val) => {
+    setFields(f => {
+      const next = [...f];
+      next[i] = { ...next[i], [key]: val };
+      return next;
+    });
+  };
+
+  const removeField = (i) => {
+    setFields(f => f.filter((_, idx) => idx !== i));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    await onSave(entity.id, { fields });
+    setSaving(false);
+  };
+
+  return (
+    <div className="absolute top-3 right-3 w-72 bg-card border border-border rounded-xl shadow-xl overflow-hidden flex flex-col max-h-[calc(100%-24px)]">
+      {/* Header */}
+      <div className="flex items-center justify-between px-3 py-2.5 flex-shrink-0" style={{ background: color?.bg }}>
+        <div>
+          <p className="text-xs font-bold text-white">{entity.name}</p>
+          <p className="text-xs text-white/70">{entity.module || 'General'}</p>
+        </div>
+        <button onClick={onClose} className="text-white/70 hover:text-white">
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {/* Fields editor */}
+      <div className="flex-1 overflow-y-auto px-3 py-2">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-semibold text-foreground">Fields</p>
+          <button
+            onClick={addField}
+            className="flex items-center gap-0.5 text-xs text-primary hover:text-primary/80 font-medium"
+          >
+            <Plus className="w-3 h-3" /> Add
+          </button>
+        </div>
+
+        {fields.length === 0 && (
+          <p className="text-xs text-muted-foreground text-center py-3">No fields yet. Add one below.</p>
+        )}
+
+        <div className="space-y-1.5">
+          {fields.map((field, i) => (
+            <div key={i} className="bg-muted/40 rounded-lg p-2 space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <input
+                  value={field.name}
+                  onChange={e => updateField(i, 'name', e.target.value)}
+                  placeholder="field_name"
+                  className="flex-1 text-xs font-mono bg-background border border-border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+                <select
+                  value={field.type}
+                  onChange={e => updateField(i, 'type', e.target.value)}
+                  className="text-xs bg-background border border-border rounded px-1 py-1 focus:outline-none"
+                  style={{ color: color?.bg }}
+                >
+                  {FIELD_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <button onClick={() => removeField(i)} className="text-muted-foreground hover:text-destructive flex-shrink-0">
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={!!field.required}
+                    onChange={e => updateField(i, 'required', e.target.checked)}
+                    className="w-3 h-3"
+                  />
+                  Required
+                </label>
+                <input
+                  value={field.description || ''}
+                  onChange={e => updateField(i, 'description', e.target.value)}
+                  placeholder="description..."
+                  className="flex-1 text-xs bg-background border border-border rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Relationships (read-only) */}
+        {(entity.relationships || []).length > 0 && (
+          <div className="mt-3 pt-3 border-t border-border">
+            <p className="text-xs font-semibold text-muted-foreground mb-1.5">Relationships</p>
+            {entity.relationships.map((r, i) => (
+              <div key={i} className="flex items-center gap-1.5 py-0.5">
+                <Link className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                <span className="text-xs text-foreground">{r.related_entity}</span>
+                <span className="text-xs text-muted-foreground ml-auto">{REL_LABELS[r.type] || r.type}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Save button */}
+      <div className="px-3 py-2.5 border-t border-border flex-shrink-0">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-white rounded-lg py-1.5 transition-opacity disabled:opacity-60"
+          style={{ background: color?.bg }}
+        >
+          {saving ? (
+            <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          ) : (
+            <Check className="w-3 h-3" />
+          )}
+          {saving ? 'Saving...' : 'Save Changes'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default function EntityMap({ entities, onEntityUpdate }) {
   const svgRef = useRef(null);
   const [positions, setPositions] = useState({});
   const [selected, setSelected] = useState(null);
-  const [dragging, setDragging] = useState(null); // { id, ox, oy }
+  const [dragging, setDragging] = useState(null);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [panning, setPanning] = useState(false);
   const [panStart, setPanStart] = useState(null);
@@ -64,7 +195,6 @@ export default function EntityMap({ entities }) {
     setPositions(map);
   }, [entities.map(e => e.id).join(',')]);
 
-  // Drag node
   const onNodeMouseDown = useCallback((e, id) => {
     e.stopPropagation();
     const pos = positions[id] || { x: 0, y: 0 };
@@ -99,24 +229,24 @@ export default function EntityMap({ entities }) {
     setZoom(z => Math.min(2, Math.max(0.3, z - e.deltaY * 0.001)));
   }, []);
 
-  // Build edges from relationships
+  // Build edges
   const edges = [];
   entities.forEach(entity => {
-    (entity.relationships || []).forEach((rel, ri) => {
+    (entity.relationships || []).forEach(rel => {
       const target = entities.find(e => e.name === rel.related_entity);
       if (!target || !positions[entity.id] || !positions[target.id]) return;
       const fromPos = positions[entity.id];
       const toPos = positions[target.id];
       const fromH = getNodeHeight(entity);
       const toH = getNodeHeight(target);
-      const x1 = fromPos.x + NODE_W / 2;
-      const y1 = fromPos.y + fromH / 2;
-      const x2 = toPos.x + NODE_W / 2;
-      const y2 = toPos.y + toH / 2;
-      // Avoid duplicate edges
       const key = [entity.id, target.id].sort().join('_');
       if (!edges.find(e => e.key === key)) {
-        edges.push({ key, x1, y1, x2, y2, label: REL_LABELS[rel.type] || rel.type, fromName: entity.name, toName: rel.related_entity });
+        edges.push({
+          key,
+          x1: fromPos.x + NODE_W / 2, y1: fromPos.y + fromH / 2,
+          x2: toPos.x + NODE_W / 2, y2: toPos.y + toH / 2,
+          label: REL_LABELS[rel.type] || rel.type,
+        });
       }
     });
   });
@@ -127,7 +257,7 @@ export default function EntityMap({ entities }) {
   if (entities.length === 0) return null;
 
   return (
-    <div className="relative w-full h-full bg-muted/20 overflow-hidden rounded-none" style={{ cursor: panning ? 'grabbing' : 'grab' }}>
+    <div className="relative w-full h-full bg-muted/20 overflow-hidden" style={{ cursor: panning ? 'grabbing' : 'grab' }}>
       <svg
         ref={svgRef}
         className="w-full h-full"
@@ -155,11 +285,8 @@ export default function EntityMap({ entities }) {
             const my = (edge.y1 + edge.y2) / 2;
             return (
               <g key={edge.key}>
-                <line
-                  x1={edge.x1} y1={edge.y1} x2={edge.x2} y2={edge.y2}
-                  stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="5,3"
-                  markerEnd="url(#arrowhead)"
-                />
+                <line x1={edge.x1} y1={edge.y1} x2={edge.x2} y2={edge.y2}
+                  stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="5,3" markerEnd="url(#arrowhead)" />
                 {edge.label && (
                   <g>
                     <rect x={mx - 14} y={my - 9} width={28} height={16} rx={4} fill="white" stroke="#e2e8f0" strokeWidth="1" />
@@ -181,40 +308,28 @@ export default function EntityMap({ entities }) {
             const visibleFields = (entity.fields || []).slice(0, MAX_FIELDS);
 
             return (
-              <g
-                key={entity.id}
-                transform={`translate(${pos.x},${pos.y})`}
-                onMouseDown={e => onNodeMouseDown(e, entity.id)}
-                style={{ cursor: 'grab' }}
-              >
-                {/* Shadow */}
+              <g key={entity.id} transform={`translate(${pos.x},${pos.y})`}
+                onMouseDown={e => onNodeMouseDown(e, entity.id)} style={{ cursor: 'grab' }}>
                 <rect x={2} y={3} width={NODE_W} height={nodeH} rx={10} fill="rgba(0,0,0,0.08)" />
-                {/* Card */}
-                <rect
-                  width={NODE_W} height={nodeH} rx={10}
-                  fill="white"
-                  stroke={isSelected ? c.bg : '#e2e8f0'}
-                  strokeWidth={isSelected ? 2.5 : 1.5}
-                />
-                {/* Header */}
+                <rect width={NODE_W} height={nodeH} rx={10} fill="white"
+                  stroke={isSelected ? c.bg : '#e2e8f0'} strokeWidth={isSelected ? 2.5 : 1.5} />
                 <rect width={NODE_W} height={32} rx={10} fill={c.bg} />
                 <rect y={22} width={NODE_W} height={10} fill={c.bg} />
-
-                {/* Icon */}
                 <circle cx={16} cy={16} r={9} fill="rgba(255,255,255,0.2)" />
                 <text x={16} y={20} textAnchor="middle" fontSize="10" fill="white">⬡</text>
-
-                {/* Name */}
                 <text x={32} y={20} fontSize="11" fontWeight="700" fill="white" fontFamily="monospace">
                   {entity.name.length > 16 ? entity.name.slice(0, 15) + '…' : entity.name}
                 </text>
-
-                {/* Module badge */}
                 <text x={NODE_W - 6} y={20} textAnchor="end" fontSize="8" fill="rgba(255,255,255,0.7)">
                   {mod.length > 10 ? mod.slice(0, 9) + '…' : mod}
                 </text>
-
-                {/* Fields */}
+                {/* Edit hint icon on selected */}
+                {isSelected && (
+                  <g>
+                    <circle cx={NODE_W - 10} cy={10} r={7} fill="rgba(255,255,255,0.3)" />
+                    <text x={NODE_W - 10} y={14} textAnchor="middle" fontSize="8" fill="white">✎</text>
+                  </g>
+                )}
                 {visibleFields.map((field, fi) => (
                   <g key={fi} transform={`translate(0,${38 + fi * FIELD_H})`}>
                     <rect x={8} width={NODE_W - 16} height={FIELD_H - 1} rx={2} fill={fi % 2 === 0 ? '#f8fafc' : 'white'} />
@@ -254,46 +369,18 @@ export default function EntityMap({ entities }) {
         </div>
       </div>
 
-      {/* Detail panel */}
+      {/* Inline edit panel */}
       {selectedEntity && (
-        <div className="absolute top-3 right-3 w-64 bg-card border border-border rounded-xl shadow-lg overflow-hidden">
-          <div className="flex items-center justify-between px-3 py-2.5" style={{ background: color?.bg }}>
-            <div>
-              <p className="text-xs font-bold text-white">{selectedEntity.name}</p>
-              <p className="text-xs text-white/70">{selectedEntity.module || 'General'}</p>
-            </div>
-            <button onClick={() => setSelected(null)} className="text-white/70 hover:text-white">
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-          {selectedEntity.description && (
-            <p className="text-xs text-muted-foreground px-3 py-2 border-b border-border">{selectedEntity.description}</p>
-          )}
-          <div className="px-3 py-2 max-h-48 overflow-y-auto">
-            {(selectedEntity.fields || []).map((f, i) => (
-              <div key={i} className="flex items-center justify-between py-0.5">
-                <span className="text-xs font-mono text-foreground">{f.name}{f.required ? <span className="text-red-500 ml-0.5">*</span> : ''}</span>
-                <span className="text-xs font-mono" style={{ color: color?.bg }}>{f.type}</span>
-              </div>
-            ))}
-          </div>
-          {(selectedEntity.relationships || []).length > 0 && (
-            <div className="px-3 py-2 border-t border-border">
-              <p className="text-xs font-semibold text-muted-foreground mb-1">Relationships</p>
-              {selectedEntity.relationships.map((r, i) => (
-                <div key={i} className="flex items-center gap-1.5 py-0.5">
-                  <Link className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                  <span className="text-xs text-foreground">{r.related_entity}</span>
-                  <span className="text-xs text-muted-foreground ml-auto">{REL_LABELS[r.type] || r.type}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <EntityEditPanel
+          entity={selectedEntity}
+          color={color}
+          onClose={() => setSelected(null)}
+          onSave={onEntityUpdate}
+        />
       )}
 
       <div className="absolute bottom-4 left-3 text-xs text-muted-foreground bg-card/80 px-2 py-1 rounded-md border border-border">
-        Drag nodes · Scroll to zoom · Click for details
+        Click node to edit · Drag to move · Scroll to zoom
       </div>
     </div>
   );
