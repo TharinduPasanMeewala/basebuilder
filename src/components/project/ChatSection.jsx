@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Send, Sparkles, FileText } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
+import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import MessageBubble from '@/components/chat/MessageBubble';
@@ -160,14 +161,14 @@ Each requirement must have: title (short, clear), description (detailed), catego
     });
 
     const reqs = result?.requirements || [];
-    if (reqs.length === 0) return;
+    if (reqs.length === 0) return 0;
 
     // Fetch existing to avoid duplication (by title)
     const existing = await base44.entities.Requirement.filter({ project_id: project.id });
     const existingTitles = new Set(existing.map(r => r.title?.toLowerCase().trim()));
 
     const newReqs = reqs.filter(r => r.title && !existingTitles.has(r.title.toLowerCase().trim()));
-    if (newReqs.length === 0) return;
+    if (newReqs.length === 0) return 0;
 
     const maxIndex = existing.length;
     await base44.entities.Requirement.bulkCreate(
@@ -184,9 +185,11 @@ Each requirement must have: title (short, clear), description (detailed), catego
         order_index: maxIndex + i,
       }))
     );
+    return newReqs.length;
   } catch (e) {
     // Silent — background process, don't interrupt chat
     console.warn('Background requirement extraction failed:', e);
+    return 0;
   }
 }
 
@@ -200,6 +203,9 @@ export default function ChatSection({ project, onRefresh }) {
   const [activeAgent, setActiveAgent] = useState(PHASE_AGENT_MAP[project.phase] || 'business_analyst');
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
+  const projectRef = useRef(project);
+  useEffect(() => { projectRef.current = project; }, [project]);
+  const { toast } = useToast();
 
   useEffect(() => {
     loadOrCreateConversation();
@@ -303,7 +309,15 @@ Respond to the user's latest message as the ${activeAgent.replace(/_/g, ' ')} ag
 
     // Background: silently extract requirements from this exchange
     setExtracting(true);
-    extractRequirementsInBackground(project, userMsg.content, response).finally(() => setExtracting(false));
+    extractRequirementsInBackground(projectRef.current, userMsg.content, response).then((count) => {
+      if (count > 0) {
+        toast({
+          title: `${count} requirement${count > 1 ? 's' : ''} captured`,
+          description: 'Automatically extracted from your conversation.',
+          duration: 3000,
+        });
+      }
+    }).finally(() => setExtracting(false));
   };
 
   const handleKeyDown = (e) => {
