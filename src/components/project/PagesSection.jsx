@@ -54,40 +54,30 @@ export default function PagesSection({ project, onRefresh }) {
     const entityNames = entities.map(e => e.name).join(', ');
     const reqContext = reqs.slice(0, 20).map(r => `- ${r.title}`).join('\n');
 
-    const result = await base44.integrations.Core.InvokeLLM({
+    const raw = await base44.integrations.Core.InvokeLLM({
       prompt: `Design the complete page/screen inventory for a ${project.type?.replace(/_/g, ' ')} application called "${project.name}".
 
 Data entities: ${entityNames || 'Not yet defined'}
 Key requirements:
 ${reqContext || 'Generate typical pages for this type of application.'}
 
-Generate 10-20 pages covering all major functionality. Include dashboards, list views, detail views, forms, and reports.`,
+Generate 10-20 pages covering all major functionality. Include dashboards, list views, detail views, forms, and reports.
+Return a JSON object like: {"pages":[{"name":"...","route":"/...","type":"list|detail|form|dashboard|report|settings|kanban|calendar|chart","description":"...","module":"..."}]}`,
       model: 'claude_sonnet_4_6',
-      response_json_schema: {
-        type: 'object',
-        properties: {
-          pages: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                name: { type: 'string' },
-                route: { type: 'string' },
-                type: { type: 'string' },
-                description: { type: 'string' },
-                module: { type: 'string' },
-                roles_access: { type: 'array', items: { type: 'string' } }
-              }
-            }
-          }
-        }
-      }
     });
 
-    const ps = result.pages || [];
-    await base44.entities.PageSpec.bulkCreate(
-      ps.map((p, i) => ({ project_id: project.id, ...p, source: 'ai_generated', order_index: i }))
-    );
+    let ps = [];
+    try {
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      const result = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+      ps = Array.isArray(result) ? result : (result?.pages || []);
+    } catch { ps = []; }
+
+    if (ps.length > 0) {
+      for (let i = 0; i < ps.length; i++) {
+        await base44.entities.PageSpec.create({ project_id: project.id, ...ps[i], source: 'ai_generated', order_index: i });
+      }
+    }
     await loadPages();
     onRefresh();
     setGenerating(false);
