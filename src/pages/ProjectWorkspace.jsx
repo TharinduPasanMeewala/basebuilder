@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, MessageSquare, FileText, Database, Layout,
-  GitBranch, Code, Sparkles, ChevronRight, Users, Rocket
+  GitBranch, Code, Sparkles, ChevronRight, Users, Rocket, Globe
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,7 @@ import ApisSection from '@/components/project/ApisSection';
 import BlueprintSection from '@/components/project/BlueprintSection';
 import AgentRoundtable from '@/components/project/AgentRoundtable';
 import AppDevelopmentSection from '@/components/project/AppDevelopmentSection';
+import DeploySection from '@/components/project/DeploySection';
 
 const SECTIONS = [
   { key: 'chat', label: 'AI Chat', icon: MessageSquare },
@@ -29,6 +30,7 @@ const SECTIONS = [
   { key: 'apis', label: 'APIs', icon: Code },
   { key: 'blueprint', label: 'Blueprint', icon: Sparkles },
   { key: 'development', label: 'Development', icon: Rocket },
+  { key: 'deploy', label: 'Deploy', icon: Globe },
 ];
 
 const TYPE_LABELS = {
@@ -222,6 +224,7 @@ function SectionContent({ section, project, onRefresh }) {
     case 'roundtable': return <AgentRoundtable project={project} />;
     case 'blueprint': return <BlueprintSection project={project} onRefresh={onRefresh} />;
     case 'development': return <AppDevelopmentSection project={project} onRefresh={onRefresh} />;
+    case 'deploy': return <DeploySection project={project} onRefresh={onRefresh} />;
     default: return <ChatSection project={project} onRefresh={onRefresh} />;
   }
 }
