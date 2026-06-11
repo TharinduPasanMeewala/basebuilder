@@ -245,7 +245,7 @@ Return ONLY a JSON object (no markdown):
 
       // ── STEP: publish ──
       setStep('publish', 'running');
-      const liveUrl = `${getAppBaseUrl()}/projects/${project.id}`;
+      const liveUrl = `${getAppBaseUrl()}/projects/${project.id}/published`;
       addLog('Assigning live URL…');
       await delay(500);
       addLog(`✓ Published at ${liveUrl}`, 'success');
