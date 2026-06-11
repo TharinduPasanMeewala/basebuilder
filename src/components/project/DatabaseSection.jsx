@@ -61,58 +61,31 @@ ${reqContext || '(No requirements defined yet — generate a typical, comprehens
 CONVERSATION CONTEXT:
 ${chatContext || '(No conversation context)'}
 
-Generate 8-12 entities. Each entity MUST have 4-8 fields with name, type, required flag, and description.
-Field types must be one of: string, text, number, integer, boolean, date, datetime, json, array, email, url, enum.
-Return ONLY the JSON, no extra text.`;
+Generate 8-12 entities. Return a JSON object with an "entities" array. Each entity has:
+- name (string)
+- description (string)
+- module (string, e.g. "Sales", "HR", "Inventory")
+- fields: array of { name, type, required (boolean), description }
+  - type must be one of: string, text, number, integer, boolean, date, datetime, json, array, email, url, enum
+- relationships: array of { related_entity, type (one_to_one|one_to_many|many_to_many), description }
 
-      const result = await base44.integrations.Core.InvokeLLM({
+Example:
+{"entities":[{"name":"Customer","description":"Stores customer info","module":"Sales","fields":[{"name":"full_name","type":"string","required":true,"description":"Customer full name"}],"relationships":[]}]}`;
+
+      const raw = await base44.integrations.Core.InvokeLLM({
         prompt,
         model: 'claude_sonnet_4_6',
-        response_json_schema: {
-          type: 'object',
-          properties: {
-            entities: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  name: { type: 'string' },
-                  description: { type: 'string' },
-                  module: { type: 'string' },
-                  fields: {
-                    type: 'array',
-                    items: {
-                      type: 'object',
-                      properties: {
-                        name: { type: 'string' },
-                        type: { type: 'string' },
-                        required: { type: 'boolean' },
-                        description: { type: 'string' },
-                        is_indexed: { type: 'boolean' },
-                        is_unique: { type: 'boolean' },
-                        foreign_key: { type: 'string' }
-                      }
-                    }
-                  },
-                  relationships: {
-                    type: 'array',
-                    items: {
-                      type: 'object',
-                      properties: {
-                        related_entity: { type: 'string' },
-                        type: { type: 'string' },
-                        description: { type: 'string' }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
       });
 
-      // Handle both {entities: [...]} and direct array responses
+      // Parse the JSON from the response string
+      let result;
+      try {
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        result = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+      } catch {
+        result = null;
+      }
+
       const ents = Array.isArray(result) ? result : (result?.entities || []);
       if (ents.length === 0) {
         toast({ title: 'No entities generated', description: 'Please try again — the AI may need more context. Add requirements first or try again.', variant: 'destructive' });
