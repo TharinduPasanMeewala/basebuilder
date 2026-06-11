@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Sparkles, FileText, Users, ChevronDown } from 'lucide-react';
+import { Send, Sparkles, FileText, Users, ChevronDown, Image, Link, X, Paperclip } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
@@ -217,6 +217,11 @@ export default function ChatSection({ project, onRefresh }) {
   const [extracting, setExtracting] = useState(false);
   const [activeAgent, setActiveAgent] = useState('business_analyst');
   const [showAgentMenu, setShowAgentMenu] = useState(false);
+  const [attachments, setAttachments] = useState([]); // [{type:'image'|'url', url, name}]
+  const [urlInput, setUrlInput] = useState('');
+  const [showUrlInput, setShowUrlInput] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const projectRef = useRef(project);
   useEffect(() => { projectRef.current = project; }, [project]);
@@ -271,19 +276,46 @@ export default function ChatSection({ project, onRefresh }) {
     setSending(false);
   };
 
+  const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    const { file_url } = await base44.integrations.Core.UploadFile({ file });
+    setAttachments(a => [...a, { type: 'image', url: file_url, name: file.name }]);
+    setUploading(false);
+    e.target.value = '';
+  };
+
+  const addUrl = () => {
+    const trimmed = urlInput.trim();
+    if (!trimmed) return;
+    setAttachments(a => [...a, { type: 'url', url: trimmed, name: trimmed }]);
+    setUrlInput('');
+    setShowUrlInput(false);
+  };
+
+  const removeAttachment = (idx) => setAttachments(a => a.filter((_, i) => i !== idx));
+
   const sendMessage = async () => {
-    if (!input.trim() || sending || !conversation) return;
+    if ((!input.trim() && attachments.length === 0) || sending || !conversation) return;
+
+    const fileUrls = attachments.map(a => a.url);
+    const attachmentDesc = attachments.length > 0
+      ? `\n[Attachments: ${attachments.map(a => `${a.type === 'image' ? '🖼 Image' : '🔗 URL'}: ${a.name}`).join(', ')}]`
+      : '';
 
     const userMsg = {
       id: Date.now().toString(),
       role: 'user',
-      content: input.trim(),
+      content: (input.trim() || 'Please analyze the attached content.') + attachmentDesc,
+      file_urls: fileUrls.length > 0 ? fileUrls : undefined,
       timestamp: new Date().toISOString(),
     };
 
     const updatedMessages = [...messages, userMsg];
     setMessages(updatedMessages);
     setInput('');
+    setAttachments([]);
     setSending(true);
 
     // Fetch full cross-agent context (what all other agents know)
@@ -301,11 +333,12 @@ export default function ChatSection({ project, onRefresh }) {
 CURRENT CONVERSATION:
 ${history}
 
-Respond as ${AGENT_NAMES[activeAgent]}. Be professional, specific, and reference the shared project knowledge when relevant. Use markdown for structured content.`;
+Respond as ${AGENT_NAMES[activeAgent]}. Be professional, specific, and reference the shared project knowledge when relevant. Use markdown for structured content.${fileUrls.length > 0 ? '\n\nThe user has shared visual/URL content — analyze it and extract design patterns, features, or requirements relevant to this project.' : ''}`;
 
     const response = await base44.integrations.Core.InvokeLLM({
       prompt,
       model: 'claude_sonnet_4_6',
+      file_urls: fileUrls.length > 0 ? fileUrls : undefined,
     });
 
     const assistantMsg = {
@@ -485,8 +518,57 @@ As ${AGENT_NAMES[agentType]}, add your perspective on the discussion above. Refe
       </div>
 
       {/* Input */}
-      <div className="border-t border-border p-4 bg-card flex-shrink-0">
+      <div className="border-t border-border p-3 bg-card flex-shrink-0">
+        {/* Attachments preview */}
+        {attachments.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-2">
+            {attachments.map((a, i) => (
+              <div key={i} className="flex items-center gap-1.5 bg-muted rounded-md px-2 py-1 text-xs max-w-[200px]">
+                {a.type === 'image' ? <Image className="w-3 h-3 text-primary flex-shrink-0" /> : <Link className="w-3 h-3 text-primary flex-shrink-0" />}
+                <span className="truncate text-foreground">{a.name}</span>
+                <button onClick={() => removeAttachment(i)} className="text-muted-foreground hover:text-destructive flex-shrink-0">
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {/* URL input row */}
+        {showUrlInput && (
+          <div className="flex gap-1.5 mb-2">
+            <input
+              value={urlInput}
+              onChange={e => setUrlInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addUrl(); } }}
+              placeholder="Paste a URL (website, Figma, GitHub, etc.)"
+              className="flex-1 text-xs bg-background border border-border rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-ring"
+              autoFocus
+            />
+            <Button size="sm" className="h-7 text-xs" onClick={addUrl} disabled={!urlInput.trim()}>Add</Button>
+            <button onClick={() => setShowUrlInput(false)} className="text-muted-foreground hover:text-foreground p-1"><X className="w-3.5 h-3.5" /></button>
+          </div>
+        )}
         <div className="flex gap-2 items-end">
+          {/* Attach buttons */}
+          <div className="flex gap-1 flex-shrink-0">
+            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading || sending}
+              className="h-9 w-9 flex items-center justify-center rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-40"
+              title="Attach image"
+            >
+              {uploading ? <div className="w-3.5 h-3.5 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" /> : <Image className="w-3.5 h-3.5" />}
+            </button>
+            <button
+              onClick={() => setShowUrlInput(v => !v)}
+              disabled={sending}
+              className={`h-9 w-9 flex items-center justify-center rounded-md border border-border transition-colors disabled:opacity-40 ${showUrlInput ? 'bg-primary text-primary-foreground border-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+              title="Add URL"
+            >
+              <Link className="w-3.5 h-3.5" />
+            </button>
+          </div>
           <div className="flex-1">
             <Textarea
               value={input}
@@ -499,15 +581,15 @@ As ${AGENT_NAMES[agentType]}, add your perspective on the discussion above. Refe
           </div>
           <Button
             onClick={sendMessage}
-            disabled={!input.trim() || sending}
+            disabled={(!input.trim() && attachments.length === 0) || sending}
             size="icon"
             className="h-11 w-11 flex-shrink-0"
           >
             <Send className="w-4 h-4" />
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground mt-2 text-center">
-          Select agent above · "Ask agent" to invite another · Shift+Enter for new line
+        <p className="text-xs text-muted-foreground mt-1.5 text-center">
+          📎 Attach images or URLs · Select agent above · Shift+Enter for new line
         </p>
       </div>
     </div>

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Copy, Check, ChevronDown, ChevronUp } from 'lucide-react';
+import { Copy, Check, ChevronDown, ChevronUp, Image, Link } from 'lucide-react';
 import AgentBadge, { getAgent } from './AgentBadge';
 
 function CodeBlock({ code, language }) {
@@ -55,10 +55,25 @@ export default function MessageBubble({ message }) {
   const isUser = message.role === 'user';
 
   if (isUser) {
+    const imageUrls = (message.file_urls || []).filter(u => /\.(png|jpg|jpeg|gif|webp|svg)/i.test(u) || u.includes('/images/'));
+    const linkUrls = (message.file_urls || []).filter(u => !imageUrls.includes(u));
     return (
       <div className="flex justify-end mb-4 animate-fade-in">
-        <div className="max-w-[75%] bg-primary text-primary-foreground rounded-2xl rounded-tr-sm px-4 py-3 text-sm leading-relaxed">
-          {message.content}
+        <div className="max-w-[75%] space-y-1.5">
+          {imageUrls.map((url, i) => (
+            <img key={i} src={url} alt="attachment" className="rounded-xl max-h-48 object-cover ml-auto block border border-border" />
+          ))}
+          {linkUrls.map((url, i) => (
+            <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-xs bg-primary/20 text-primary border border-primary/30 rounded-lg px-3 py-1.5 hover:underline">
+              <Link className="w-3 h-3" />{url.slice(0, 60)}{url.length > 60 ? '…' : ''}
+            </a>
+          ))}
+          {message.content && (
+            <div className="bg-primary text-primary-foreground rounded-2xl rounded-tr-sm px-4 py-3 text-sm leading-relaxed">
+              {message.content}
+            </div>
+          )}
         </div>
       </div>
     );
