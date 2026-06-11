@@ -52,68 +52,78 @@ export default function RequirementsSection({ project, onRefresh }) {
 
   const generateRequirements = async () => {
     setGenerating(true);
-    const convos = await base44.entities.Conversation.filter({ project_id: project.id });
-    const chatHistory = convos.flatMap(c => c.messages || []).map(m => `${m.role}: ${m.content}`).join('\n\n').slice(0, 8000);
+    try {
+      const convos = await base44.entities.Conversation.filter({ project_id: project.id });
+      const chatHistory = convos
+        .flatMap(c => c.messages || [])
+        .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+        .join('\n\n')
+        .slice(0, 8000);
 
-    const prompt = `Based on the following conversation about a ${project.type?.replace(/_/g, ' ')} application called "${project.name}", generate a comprehensive list of requirements.
+      const prompt = `You are a senior business analyst. Analyze the following project information and generate a comprehensive list of software requirements.
 
-CONVERSATION HISTORY:
-${chatHistory || 'No conversation history yet. Generate typical requirements for a ' + project.type?.replace(/_/g, ' ') + ' application.'}
+PROJECT: "${project.name}"
+TYPE: ${project.type?.replace(/_/g, ' ')}
+DESCRIPTION: ${project.description || 'No description provided'}
 
-Generate requirements in the following JSON format:
-{
-  "requirements": [
-    {
-      "title": "Requirement title",
-      "description": "Detailed description",
-      "category": "functional|non_functional|business_rule|user_story|constraint",
-      "priority": "critical|high|medium|low",
-      "module": "Module name",
-      "acceptance_criteria": "How to verify this is met"
-    }
-  ]
-}
+${chatHistory ? `CONVERSATION HISTORY:\n${chatHistory}` : `Generate typical requirements for a ${project.type?.replace(/_/g, ' ')} application.`}
 
-Generate 15-25 well-structured requirements covering different categories and modules. For user stories use format: "As a [persona], I want to [action] so that [benefit]"`;
+Generate 15-25 well-structured requirements covering different categories (functional, non_functional, business_rule, user_story, constraint) and modules. For user stories use format: "As a [persona], I want to [action] so that [benefit]".
 
-    const result = await base44.integrations.Core.InvokeLLM({
-      prompt,
-      model: 'claude_sonnet_4_6',
-      response_json_schema: {
-        type: 'object',
-        properties: {
-          requirements: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                title: { type: 'string' },
-                description: { type: 'string' },
-                category: { type: 'string' },
-                priority: { type: 'string' },
-                module: { type: 'string' },
-                acceptance_criteria: { type: 'string' }
+Return ONLY a JSON object with a "requirements" array. Each item must have: title, description, category (one of: functional, non_functional, business_rule, user_story, constraint, assumption), priority (one of: critical, high, medium, low), module, acceptance_criteria.`;
+
+      const result = await base44.integrations.Core.InvokeLLM({
+        prompt,
+        response_json_schema: {
+          type: 'object',
+          properties: {
+            requirements: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  title: { type: 'string' },
+                  description: { type: 'string' },
+                  category: { type: 'string' },
+                  priority: { type: 'string' },
+                  module: { type: 'string' },
+                  acceptance_criteria: { type: 'string' }
+                }
               }
             }
           }
         }
-      }
-    });
+      });
 
-    const reqs = result.requirements || [];
-    await base44.entities.Requirement.bulkCreate(
-      reqs.map((r, i) => ({
-        project_id: project.id,
-        ...r,
-        status: 'draft',
-        source: 'ai_generated',
-        order_index: i,
-      }))
-    );
-    await loadRequirements();
-    await base44.entities.Project.update(project.id, { phase: 'analysis', completeness_score: 25 });
-    onRefresh();
-    setGenerating(false);
+      const reqs = (result?.requirements || result?.data?.requirements || []);
+      if (reqs.length === 0) throw new Error('No requirements returned from AI');
+
+      const validCategories = ['functional', 'non_functional', 'business_rule', 'user_story', 'constraint', 'assumption'];
+      const validPriorities = ['critical', 'high', 'medium', 'low'];
+
+      await base44.entities.Requirement.bulkCreate(
+        reqs.map((r, i) => ({
+          project_id: project.id,
+          title: r.title || 'Untitled',
+          description: r.description || '',
+          category: validCategories.includes(r.category) ? r.category : 'functional',
+          priority: validPriorities.includes(r.priority) ? r.priority : 'medium',
+          module: r.module || '',
+          acceptance_criteria: r.acceptance_criteria || '',
+          status: 'draft',
+          source: 'ai_generated',
+          order_index: i,
+        }))
+      );
+      await loadRequirements();
+      await base44.entities.Project.update(project.id, { phase: 'analysis', completeness_score: 25 });
+      onRefresh();
+    } catch (err) {
+      console.error('Requirements generation failed:', err);
+      alert('Failed to generate requirements: ' + err.message);
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const saveRequirement = async () => {
