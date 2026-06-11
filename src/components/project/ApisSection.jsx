@@ -42,40 +42,26 @@ export default function ApisSection({ project, onRefresh }) {
     const entities = await base44.entities.DataEntity.filter({ project_id: project.id });
     const entityNames = entities.map(e => e.name).join(', ');
 
-    const result = await base44.integrations.Core.InvokeLLM({
+    const raw = await base44.integrations.Core.InvokeLLM({
       prompt: `Design the REST API specification for a ${project.type?.replace(/_/g, ' ')} application called "${project.name}".
 
 Data entities: ${entityNames || 'Not defined yet'}
 
-Generate a comprehensive REST API with CRUD operations for all entities, plus business-logic endpoints. Follow RESTful conventions.`,
+Generate a comprehensive REST API with CRUD operations for all entities, plus business-logic endpoints. Follow RESTful conventions.
+Return JSON like: {"endpoints":[{"name":"...","method":"GET|POST|PUT|PATCH|DELETE","path":"/api/...","description":"...","module":"...","auth_required":true,"roles":[],"tags":[]}]}`,
       model: 'claude_sonnet_4_6',
-      response_json_schema: {
-        type: 'object',
-        properties: {
-          endpoints: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                name: { type: 'string' },
-                method: { type: 'string' },
-                path: { type: 'string' },
-                description: { type: 'string' },
-                module: { type: 'string' },
-                auth_required: { type: 'boolean' },
-                roles: { type: 'array', items: { type: 'string' } },
-                tags: { type: 'array', items: { type: 'string' } }
-              }
-            }
-          }
-        }
-      }
     });
 
-    const eps = result.endpoints || [];
-    await base44.entities.ApiEndpoint.bulkCreate(
-      eps.map(e => ({ project_id: project.id, ...e, source: 'ai_generated' }))
-    );
+    let eps = [];
+    try {
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      const result = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+      eps = Array.isArray(result) ? result : (result?.endpoints || []);
+    } catch { eps = []; }
+
+    for (const e of eps) {
+      await base44.entities.ApiEndpoint.create({ project_id: project.id, ...e, source: 'ai_generated' });
+    }
     await loadEndpoints();
     await base44.entities.Project.update(project.id, { phase: 'review', completeness_score: 80 });
     onRefresh();
