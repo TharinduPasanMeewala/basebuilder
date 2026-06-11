@@ -1,0 +1,117 @@
+{
+  "name": "DataEntity",
+  "type": "object",
+  "properties": {
+    "project_id": {
+      "type": "string",
+      "title": "Project ID"
+    },
+    "name": {
+      "type": "string",
+      "title": "Entity Name"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description"
+    },
+    "module": {
+      "type": "string",
+      "title": "Module"
+    },
+    "fields": {
+      "type": "array",
+      "title": "Fields",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "description": {
+            "type": "string"
+          },
+          "default_value": {
+            "type": "string"
+          },
+          "enum_values": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "is_indexed": {
+            "type": "boolean"
+          },
+          "is_unique": {
+            "type": "boolean"
+          },
+          "foreign_key": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "relationships": {
+      "type": "array",
+      "title": "Relationships",
+      "items": {
+        "type": "object",
+        "properties": {
+          "related_entity": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "one_to_one",
+              "one_to_many",
+              "many_to_many"
+            ]
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "indexes": {
+      "type": "array",
+      "title": "Indexes",
+      "items": {
+        "type": "object",
+        "properties": {
+          "fields": {
+            "type": "array"
+          },
+          "unique": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "ai_generated",
+        "user_defined"
+      ],
+      "default": "ai_generated",
+      "title": "Source"
+    },
+    "order_index": {
+      "type": "number",
+      "default": 0,
+      "title": "Order"
+    }
+  },
+  "required": [
+    "project_id",
+    "name"
+  ]
+}

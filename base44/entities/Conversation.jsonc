@@ -1,0 +1,89 @@
+{
+  "name": "Conversation",
+  "type": "object",
+  "properties": {
+    "project_id": {
+      "type": "string",
+      "title": "Project ID"
+    },
+    "section": {
+      "type": "string",
+      "enum": [
+        "discovery",
+        "analysis",
+        "architecture",
+        "database",
+        "ui_ux",
+        "workflows",
+        "apis",
+        "qa_review",
+        "general"
+      ],
+      "default": "discovery",
+      "title": "Section"
+    },
+    "agent_type": {
+      "type": "string",
+      "enum": [
+        "business_analyst",
+        "product_manager",
+        "solution_architect",
+        "db_architect",
+        "ui_ux_architect",
+        "backend_architect",
+        "qa_architect"
+      ],
+      "default": "business_analyst",
+      "title": "Agent Type"
+    },
+    "title": {
+      "type": "string",
+      "title": "Conversation Title"
+    },
+    "messages": {
+      "type": "array",
+      "title": "Messages",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ]
+          },
+          "content": {
+            "type": "string"
+          },
+          "agent_type": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          },
+          "artifacts": {
+            "type": "array"
+          }
+        }
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "completed",
+        "archived"
+      ],
+      "default": "active",
+      "title": "Status"
+    }
+  },
+  "required": [
+    "project_id",
+    "agent_type"
+  ]
+}

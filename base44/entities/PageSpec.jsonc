@@ -1,0 +1,94 @@
+{
+  "name": "PageSpec",
+  "type": "object",
+  "properties": {
+    "project_id": {
+      "type": "string",
+      "title": "Project ID"
+    },
+    "name": {
+      "type": "string",
+      "title": "Page Name"
+    },
+    "route": {
+      "type": "string",
+      "title": "Route/Path"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "dashboard",
+        "list",
+        "detail",
+        "form",
+        "report",
+        "settings",
+        "auth",
+        "landing",
+        "kanban",
+        "calendar",
+        "chart"
+      ],
+      "title": "Page Type"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description"
+    },
+    "parent_page_id": {
+      "type": "string",
+      "title": "Parent Page ID"
+    },
+    "module": {
+      "type": "string",
+      "title": "Module"
+    },
+    "components": {
+      "type": "array",
+      "title": "Components",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "data_source": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "roles_access": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Roles with Access"
+    },
+    "order_index": {
+      "type": "number",
+      "default": 0,
+      "title": "Order"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "ai_generated",
+        "user_defined"
+      ],
+      "default": "ai_generated",
+      "title": "Source"
+    }
+  },
+  "required": [
+    "project_id",
+    "name",
+    "type"
+  ]
+}

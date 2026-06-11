@@ -1,0 +1,93 @@
+{
+  "name": "ApiEndpoint",
+  "type": "object",
+  "properties": {
+    "project_id": {
+      "type": "string",
+      "title": "Project ID"
+    },
+    "name": {
+      "type": "string",
+      "title": "Endpoint Name"
+    },
+    "method": {
+      "type": "string",
+      "enum": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ],
+      "title": "HTTP Method"
+    },
+    "path": {
+      "type": "string",
+      "title": "Path"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description"
+    },
+    "module": {
+      "type": "string",
+      "title": "Module"
+    },
+    "auth_required": {
+      "type": "boolean",
+      "default": true,
+      "title": "Auth Required"
+    },
+    "roles": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Allowed Roles"
+    },
+    "request_body": {
+      "type": "object",
+      "title": "Request Body Schema"
+    },
+    "response_body": {
+      "type": "object",
+      "title": "Response Body Schema"
+    },
+    "query_params": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "title": "Query Parameters"
+    },
+    "path_params": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "title": "Path Parameters"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Tags"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "ai_generated",
+        "user_defined"
+      ],
+      "default": "ai_generated",
+      "title": "Source"
+    }
+  },
+  "required": [
+    "project_id",
+    "name",
+    "method",
+    "path"
+  ]
+}

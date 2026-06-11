@@ -1,0 +1,91 @@
+{
+  "name": "Project",
+  "type": "object",
+  "properties": {
+    "org_id": {
+      "type": "string",
+      "title": "Organization ID"
+    },
+    "name": {
+      "type": "string",
+      "title": "Project Name"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "saas_product",
+        "erp_system",
+        "crm_system",
+        "hr_system",
+        "inventory_system",
+        "warehouse_system",
+        "accounting_system",
+        "ecommerce_platform",
+        "internal_tool",
+        "custom_application",
+        "project_management",
+        "service_management",
+        "customer_portal"
+      ],
+      "title": "Project Type"
+    },
+    "phase": {
+      "type": "string",
+      "enum": [
+        "discovery",
+        "analysis",
+        "design",
+        "architecture",
+        "review",
+        "generation",
+        "completed"
+      ],
+      "default": "discovery",
+      "title": "Current Phase"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "paused",
+        "completed",
+        "archived"
+      ],
+      "default": "active",
+      "title": "Status"
+    },
+    "industry": {
+      "type": "string",
+      "title": "Target Industry"
+    },
+    "version_count": {
+      "type": "number",
+      "default": 1,
+      "title": "Version Count"
+    },
+    "completeness_score": {
+      "type": "number",
+      "default": 0,
+      "title": "Completeness Score (%)"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Tags"
+    },
+    "created_by": {
+      "type": "string",
+      "title": "Created By"
+    }
+  },
+  "required": [
+    "name",
+    "type"
+  ]
+}

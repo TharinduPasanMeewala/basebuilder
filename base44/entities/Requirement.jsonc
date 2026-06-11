@@ -1,0 +1,80 @@
+{
+  "name": "Requirement",
+  "type": "object",
+  "properties": {
+    "project_id": {
+      "type": "string",
+      "title": "Project ID"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "functional",
+        "non_functional",
+        "business_rule",
+        "user_story",
+        "constraint",
+        "assumption"
+      ],
+      "title": "Category"
+    },
+    "title": {
+      "type": "string",
+      "title": "Title"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description"
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "high",
+        "medium",
+        "low"
+      ],
+      "default": "medium",
+      "title": "Priority"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "confirmed",
+        "rejected",
+        "deferred"
+      ],
+      "default": "draft",
+      "title": "Status"
+    },
+    "acceptance_criteria": {
+      "type": "string",
+      "title": "Acceptance Criteria"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "ai_generated",
+        "user_defined",
+        "imported"
+      ],
+      "default": "ai_generated",
+      "title": "Source"
+    },
+    "module": {
+      "type": "string",
+      "title": "Module"
+    },
+    "order_index": {
+      "type": "number",
+      "default": 0,
+      "title": "Order"
+    }
+  },
+  "required": [
+    "project_id",
+    "title",
+    "category"
+  ]
+}

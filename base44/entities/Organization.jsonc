@@ -1,0 +1,59 @@
+{
+  "name": "Organization",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "Organization Name"
+    },
+    "slug": {
+      "type": "string",
+      "title": "Slug"
+    },
+    "plan": {
+      "type": "string",
+      "enum": [
+        "free",
+        "starter",
+        "professional",
+        "enterprise"
+      ],
+      "default": "free",
+      "title": "Plan"
+    },
+    "ai_credits_remaining": {
+      "type": "number",
+      "default": 100,
+      "title": "AI Credits Remaining"
+    },
+    "owner_id": {
+      "type": "string",
+      "title": "Owner User ID"
+    },
+    "logo_url": {
+      "type": "string",
+      "title": "Logo URL"
+    },
+    "industry": {
+      "type": "string",
+      "title": "Industry"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "suspended",
+        "trial"
+      ],
+      "default": "active",
+      "title": "Status"
+    },
+    "settings": {
+      "type": "object",
+      "title": "Settings"
+    }
+  },
+  "required": [
+    "name"
+  ]
+}

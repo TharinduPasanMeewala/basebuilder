@@ -1,0 +1,54 @@
+{
+  "name": "UserRole",
+  "type": "object",
+  "properties": {
+    "project_id": {
+      "type": "string",
+      "title": "Project ID"
+    },
+    "name": {
+      "type": "string",
+      "title": "Role Name"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description"
+    },
+    "permissions": {
+      "type": "array",
+      "title": "Permissions",
+      "items": {
+        "type": "object",
+        "properties": {
+          "module": {
+            "type": "string"
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "is_system_role": {
+      "type": "boolean",
+      "default": false,
+      "title": "System Role"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "ai_generated",
+        "user_defined"
+      ],
+      "default": "ai_generated",
+      "title": "Source"
+    }
+  },
+  "required": [
+    "project_id",
+    "name"
+  ]
+}

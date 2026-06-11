@@ -1,0 +1,97 @@
+{
+  "name": "WorkflowSpec",
+  "type": "object",
+  "properties": {
+    "project_id": {
+      "type": "string",
+      "title": "Project ID"
+    },
+    "name": {
+      "type": "string",
+      "title": "Workflow Name"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description"
+    },
+    "trigger": {
+      "type": "string",
+      "title": "Trigger"
+    },
+    "trigger_type": {
+      "type": "string",
+      "enum": [
+        "entity_create",
+        "entity_update",
+        "entity_delete",
+        "scheduled",
+        "manual",
+        "api_call",
+        "event"
+      ],
+      "title": "Trigger Type"
+    },
+    "steps": {
+      "type": "array",
+      "title": "Steps",
+      "items": {
+        "type": "object",
+        "properties": {
+          "order": {
+            "type": "number"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "conditions": {
+            "type": "string"
+          },
+          "actions": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "status_flow": {
+      "type": "array",
+      "title": "Status Flow",
+      "items": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "condition": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "module": {
+      "type": "string",
+      "title": "Module"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "ai_generated",
+        "user_defined"
+      ],
+      "default": "ai_generated",
+      "title": "Source"
+    }
+  },
+  "required": [
+    "project_id",
+    "name"
+  ]
+}

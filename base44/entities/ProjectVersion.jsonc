@@ -1,0 +1,38 @@
+{
+  "name": "ProjectVersion",
+  "type": "object",
+  "properties": {
+    "project_id": {
+      "type": "string",
+      "title": "Project ID"
+    },
+    "version_number": {
+      "type": "number",
+      "title": "Version Number"
+    },
+    "label": {
+      "type": "string",
+      "title": "Version Label"
+    },
+    "notes": {
+      "type": "string",
+      "title": "Release Notes"
+    },
+    "snapshot": {
+      "type": "object",
+      "title": "Full Snapshot (JSON)"
+    },
+    "phase": {
+      "type": "string",
+      "title": "Phase at Save"
+    },
+    "created_by": {
+      "type": "string",
+      "title": "Created By"
+    }
+  },
+  "required": [
+    "project_id",
+    "version_number"
+  ]
+}
