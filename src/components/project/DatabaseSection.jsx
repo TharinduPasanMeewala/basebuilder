@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Wand2, Trash2, ChevronRight, ChevronDown, Database, Link } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
+import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -20,6 +21,7 @@ export default function DatabaseSection({ project, onRefresh }) {
   const [showDialog, setShowDialog] = useState(false);
   const [editEntity, setEditEntity] = useState(null);
   const [form, setForm] = useState({ name: '', description: '', module: '', fields: [] });
+  const { toast } = useToast();
 
   useEffect(() => { loadEntities(); }, [project.id]);
 
@@ -32,15 +34,16 @@ export default function DatabaseSection({ project, onRefresh }) {
 
   const generateEntities = async () => {
     setGenerating(true);
-    const [convos, reqs] = await Promise.all([
-      base44.entities.Conversation.filter({ project_id: project.id }),
-      base44.entities.Requirement.filter({ project_id: project.id }),
-    ]);
-    const chatContext = convos.flatMap(c => c.messages || []).map(m => `${m.role}: ${m.content}`).join('\n').slice(0, 4000);
-    const reqContext = reqs.map(r => `- ${r.title}: ${r.description}`).join('\n').slice(0, 2000);
+    try {
+      const [convos, reqs] = await Promise.all([
+        base44.entities.Conversation.filter({ project_id: project.id }),
+        base44.entities.Requirement.filter({ project_id: project.id }),
+      ]);
+      const chatContext = convos.flatMap(c => c.messages || []).map(m => `${m.role}: ${m.content}`).join('\n').slice(0, 4000);
+      const reqContext = reqs.map(r => `- ${r.title}: ${r.description}`).join('\n').slice(0, 2000);
 
-    const result = await base44.integrations.Core.InvokeLLM({
-      prompt: `Design the complete database schema for a ${project.type?.replace(/_/g, ' ')} application called "${project.name}".
+      const result = await base44.integrations.Core.InvokeLLM({
+        prompt: `Design the complete database schema for a ${project.type?.replace(/_/g, ' ')} application called "${project.name}".
 
 Context from requirements:
 ${reqContext || 'No requirements yet - generate a typical schema for this type of application.'}
@@ -48,42 +51,43 @@ ${reqContext || 'No requirements yet - generate a typical schema for this type o
 Chat context:
 ${chatContext || 'No chat context.'}
 
-Generate a comprehensive data model with 8-15 entities. Include all necessary fields, relationships, and indexes.`,
-      model: 'claude_sonnet_4_6',
-      response_json_schema: {
-        type: 'object',
-        properties: {
-          entities: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                name: { type: 'string' },
-                description: { type: 'string' },
-                module: { type: 'string' },
-                fields: {
-                  type: 'array',
-                  items: {
-                    type: 'object',
-                    properties: {
-                      name: { type: 'string' },
-                      type: { type: 'string' },
-                      required: { type: 'boolean' },
-                      description: { type: 'string' },
-                      is_indexed: { type: 'boolean' },
-                      is_unique: { type: 'boolean' },
-                      foreign_key: { type: 'string' }
+Generate a comprehensive data model with 8-15 entities. Each entity MUST have at least 4-8 fields. Include all necessary fields, relationships, and indexes.`,
+        model: 'claude_sonnet_4_6',
+        response_json_schema: {
+          type: 'object',
+          properties: {
+            entities: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string' },
+                  description: { type: 'string' },
+                  module: { type: 'string' },
+                  fields: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        name: { type: 'string' },
+                        type: { type: 'string' },
+                        required: { type: 'boolean' },
+                        description: { type: 'string' },
+                        is_indexed: { type: 'boolean' },
+                        is_unique: { type: 'boolean' },
+                        foreign_key: { type: 'string' }
+                      }
                     }
-                  }
-                },
-                relationships: {
-                  type: 'array',
-                  items: {
-                    type: 'object',
-                    properties: {
-                      related_entity: { type: 'string' },
-                      type: { type: 'string' },
-                      description: { type: 'string' }
+                  },
+                  relationships: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        related_entity: { type: 'string' },
+                        type: { type: 'string' },
+                        description: { type: 'string' }
+                      }
                     }
                   }
                 }
@@ -91,17 +95,26 @@ Generate a comprehensive data model with 8-15 entities. Include all necessary fi
             }
           }
         }
-      }
-    });
+      });
 
-    const ents = result.entities || [];
-    await base44.entities.DataEntity.bulkCreate(
-      ents.map((e, i) => ({ project_id: project.id, ...e, source: 'ai_generated', order_index: i }))
-    );
-    await loadEntities();
-    await base44.entities.Project.update(project.id, { phase: 'design', completeness_score: 50 });
-    onRefresh();
-    setGenerating(false);
+      const ents = result?.entities || [];
+      if (ents.length === 0) {
+        toast({ title: 'No entities generated', description: 'The AI did not return any entities. Try adding more requirements first.', variant: 'destructive' });
+        return;
+      }
+      await base44.entities.DataEntity.bulkCreate(
+        ents.map((e, i) => ({ project_id: project.id, ...e, source: 'ai_generated', order_index: i }))
+      );
+      await loadEntities();
+      await base44.entities.Project.update(project.id, { phase: 'design', completeness_score: 50 });
+      onRefresh();
+      toast({ title: `${ents.length} entities generated`, description: 'Your data model has been created successfully.' });
+    } catch (e) {
+      console.error('Entity generation failed:', e);
+      toast({ title: 'Generation failed', description: e.message || 'Something went wrong. Please try again.', variant: 'destructive' });
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const toggleExpanded = (id) => setExpanded(e => ({ ...e, [id]: !e[id] }));
