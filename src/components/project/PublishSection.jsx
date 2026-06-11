@@ -27,10 +27,9 @@ function slugify(name) {
     .slice(0, 28);
 }
 
-function generateAppUrl(projectName) {
-  const slug = slugify(projectName);
-  const id = Math.random().toString(36).slice(2, 7);
-  return `https://${slug}-${id}.base44.app`;
+function getAppBaseUrl() {
+  // Use the actual deployed app's origin (e.g. https://petite-build-core-logic.base44.app)
+  return window.location.origin;
 }
 
 export default function PublishSection({ project, onRefresh }) {
@@ -229,7 +228,7 @@ Return ONLY a JSON object (no markdown):
         `NODE_ENV=production`,
         `PORT=3000`,
         `APP_NAME=${project.name}`,
-        `CORS_ORIGIN=https://${slugify(project.name)}.base44.app`,
+        `CORS_ORIGIN=${getAppBaseUrl()}`,
       ];
       addLog(`Environment: ${envVars.length} variables configured`);
       setStep('env', 'done');
@@ -246,7 +245,7 @@ Return ONLY a JSON object (no markdown):
 
       // ── STEP: publish ──
       setStep('publish', 'running');
-      const liveUrl = generateAppUrl(project.name);
+      const liveUrl = `${getAppBaseUrl()}/projects/${project.id}`;
       addLog('Assigning live URL…');
       await delay(500);
       addLog(`✓ Published at ${liveUrl}`, 'success');
