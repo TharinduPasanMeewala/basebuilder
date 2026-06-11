@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Sparkles, ChevronDown } from 'lucide-react';
+import { Send, Sparkles, FileText } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -120,12 +120,83 @@ Provide a completeness score (0-100%) and a prioritized list of gaps to address.
   return agentDescriptions[agentType] || agentDescriptions.business_analyst;
 }
 
+const VALID_CATEGORIES = ['functional', 'non_functional', 'business_rule', 'user_story', 'constraint', 'assumption'];
+const VALID_PRIORITIES = ['critical', 'high', 'medium', 'low'];
+
+async function extractRequirementsInBackground(project, userMsg, assistantMsg) {
+  try {
+    const prompt = `You are a requirements extraction engine. Analyze this conversation exchange and extract any concrete software requirements mentioned or implied.
+
+PROJECT: "${project.name}" (${project.type?.replace(/_/g, ' ')})
+
+USER SAID: ${userMsg}
+
+ASSISTANT RESPONDED: ${assistantMsg}
+
+Extract only CONCRETE, ACTIONABLE requirements from this exchange. If there are none, return an empty array.
+Each requirement must have: title (short, clear), description (detailed), category (one of: functional, non_functional, business_rule, user_story, constraint, assumption), priority (one of: critical, high, medium, low), module (logical area e.g. "Authentication", "Inventory"), acceptance_criteria.`;
+
+    const result = await base44.integrations.Core.InvokeLLM({
+      prompt,
+      response_json_schema: {
+        type: 'object',
+        properties: {
+          requirements: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                title: { type: 'string' },
+                description: { type: 'string' },
+                category: { type: 'string' },
+                priority: { type: 'string' },
+                module: { type: 'string' },
+                acceptance_criteria: { type: 'string' }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    const reqs = result?.requirements || [];
+    if (reqs.length === 0) return;
+
+    // Fetch existing to avoid duplication (by title)
+    const existing = await base44.entities.Requirement.filter({ project_id: project.id });
+    const existingTitles = new Set(existing.map(r => r.title?.toLowerCase().trim()));
+
+    const newReqs = reqs.filter(r => r.title && !existingTitles.has(r.title.toLowerCase().trim()));
+    if (newReqs.length === 0) return;
+
+    const maxIndex = existing.length;
+    await base44.entities.Requirement.bulkCreate(
+      newReqs.map((r, i) => ({
+        project_id: project.id,
+        title: r.title,
+        description: r.description || '',
+        category: VALID_CATEGORIES.includes(r.category) ? r.category : 'functional',
+        priority: VALID_PRIORITIES.includes(r.priority) ? r.priority : 'medium',
+        module: r.module || '',
+        acceptance_criteria: r.acceptance_criteria || '',
+        status: 'draft',
+        source: 'ai_generated',
+        order_index: maxIndex + i,
+      }))
+    );
+  } catch (e) {
+    // Silent — background process, don't interrupt chat
+    console.warn('Background requirement extraction failed:', e);
+  }
+}
+
 export default function ChatSection({ project, onRefresh }) {
   const [conversation, setConversation] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [extracting, setExtracting] = useState(false);
   const [activeAgent, setActiveAgent] = useState(PHASE_AGENT_MAP[project.phase] || 'business_analyst');
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
@@ -229,6 +300,10 @@ Respond to the user's latest message as the ${activeAgent.replace(/_/g, ' ')} ag
     await base44.entities.Conversation.update(conversation.id, { messages: finalMessages, agent_type: activeAgent });
     setMessages(finalMessages);
     setSending(false);
+
+    // Background: silently extract requirements from this exchange
+    setExtracting(true);
+    extractRequirementsInBackground(project, userMsg.content, response).finally(() => setExtracting(false));
   };
 
   const handleKeyDown = (e) => {
@@ -270,7 +345,13 @@ Respond to the user's latest message as the ${activeAgent.replace(/_/g, ' ')} ag
             <AgentBadge agentType={agentType} size="sm" showLabel={false} />
           </button>
         ))}
-        <div className="ml-auto flex-shrink-0">
+        <div className="ml-auto flex-shrink-0 flex items-center gap-2">
+          {extracting && (
+            <span className="flex items-center gap-1 text-xs text-muted-foreground animate-pulse">
+              <FileText className="w-3 h-3" />
+              capturing requirements...
+            </span>
+          )}
           <AgentBadge agentType={activeAgent} size="sm" showLabel={true} />
         </div>
       </div>
