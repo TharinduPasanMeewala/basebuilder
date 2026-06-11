@@ -66,7 +66,7 @@ async function getProjectContext(project) {
       const fields = (e.fields || []).map(f => `${f.name}:${f.type}${f.required ? '*' : ''}`).join(', ');
       ctx += `• ${e.name} [${e.module || 'General'}] — ${fields.slice(0, 200)}\n`;
       if (e.relationships?.length > 0) {
-        ctx += `  → ${e.relationships.map(r => `${r.type.replace(/_/g,' ')} ${r.related_entity}`).join(', ')}\n`;
+        ctx += `  → ${e.relationships.map(r => `${(r.type || '').replace(/_/g,' ')} ${r.related_entity}`).join(', ')}\n`;
       }
     });
     ctx += '\n';
@@ -145,8 +145,13 @@ export default function AgentRoundtable({ project }) {
   const startDiscussion = async () => {
     stopRef.current = false;
     setRunning(true);
+    let projectCtx = '';
+    try {
+      projectCtx = await getProjectContext(project);
+    } catch (e) {
+      console.error('Failed to load project context:', e);
+    }
     const activeTopic = customTopic.trim() || topic;
-    const projectCtx = await getProjectContext(project);
 
     let currentMessages = [...discussion];
 
@@ -205,7 +210,11 @@ Now give YOUR perspective on this topic as ${AGENT_NAMES[agentType]}. Be specifi
       setDiscussion([...currentMessages]);
     }
 
-    await saveRoundtable(currentMessages);
+    try {
+      await saveRoundtable(currentMessages);
+    } catch (e) {
+      console.error('Failed to save roundtable:', e);
+    }
     setCurrentAgent(null);
     setRunning(false);
 
