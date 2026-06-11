@@ -47,46 +47,27 @@ export default function WorkflowsSection({ project, onRefresh }) {
     ]);
     const entityNames = entities.map(e => e.name).join(', ');
 
-    const result = await base44.integrations.Core.InvokeLLM({
+    const raw = await base44.integrations.Core.InvokeLLM({
       prompt: `Design business workflows and automations for a ${project.type?.replace(/_/g, ' ')} application called "${project.name}".
 
 Data entities: ${entityNames || 'Not defined yet'}
 Requirements: ${reqs.slice(0, 10).map(r => r.title).join(', ') || 'Not defined yet'}
 
-Generate 6-10 key business workflows including status flows, approval processes, notifications, and automations.`,
+Generate 6-10 key business workflows including status flows, approval processes, notifications, and automations.
+Return JSON like: {"workflows":[{"name":"...","description":"...","trigger":"...","trigger_type":"entity_create|entity_update|entity_delete|scheduled|manual|api_call|event","module":"...","steps":[{"order":1,"name":"...","description":"..."}],"status_flow":[{"from":"...","to":"...","condition":"..."}]}]}`,
       model: 'claude_sonnet_4_6',
-      response_json_schema: {
-        type: 'object',
-        properties: {
-          workflows: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                name: { type: 'string' },
-                description: { type: 'string' },
-                trigger: { type: 'string' },
-                trigger_type: { type: 'string' },
-                module: { type: 'string' },
-                steps: {
-                  type: 'array',
-                  items: { type: 'object', properties: { order: { type: 'number' }, name: { type: 'string' }, type: { type: 'string' }, description: { type: 'string' }, actions: { type: 'string' } } }
-                },
-                status_flow: {
-                  type: 'array',
-                  items: { type: 'object', properties: { from: { type: 'string' }, to: { type: 'string' }, condition: { type: 'string' } } }
-                }
-              }
-            }
-          }
-        }
-      }
     });
 
-    const wfs = result.workflows || [];
-    await base44.entities.WorkflowSpec.bulkCreate(
-      wfs.map(w => ({ project_id: project.id, ...w, source: 'ai_generated' }))
-    );
+    let wfs = [];
+    try {
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      const result = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+      wfs = Array.isArray(result) ? result : (result?.workflows || []);
+    } catch { wfs = []; }
+
+    for (const w of wfs) {
+      await base44.entities.WorkflowSpec.create({ project_id: project.id, ...w, source: 'ai_generated' });
+    }
     await loadWorkflows();
     await base44.entities.Project.update(project.id, { phase: 'architecture', completeness_score: 65 });
     onRefresh();
