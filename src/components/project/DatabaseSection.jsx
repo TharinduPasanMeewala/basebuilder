@@ -102,9 +102,22 @@ Generate a comprehensive data model with 8-15 entities. Each entity MUST have at
         toast({ title: 'No entities generated', description: 'The AI did not return any entities. Try adding more requirements first.', variant: 'destructive' });
         return;
       }
-      await base44.entities.DataEntity.bulkCreate(
-        ents.map((e, i) => ({ project_id: project.id, ...e, source: 'ai_generated', order_index: i }))
-      );
+
+      // Create entities one by one to avoid bulk payload size issues
+      for (let i = 0; i < ents.length; i++) {
+        const e = ents[i];
+        await base44.entities.DataEntity.create({
+          project_id: project.id,
+          name: e.name || `Entity${i + 1}`,
+          description: e.description || '',
+          module: e.module || '',
+          fields: Array.isArray(e.fields) ? e.fields : [],
+          relationships: Array.isArray(e.relationships) ? e.relationships : [],
+          source: 'ai_generated',
+          order_index: i,
+        });
+      }
+
       await loadEntities();
       await base44.entities.Project.update(project.id, { phase: 'design', completeness_score: 50 });
       onRefresh();
