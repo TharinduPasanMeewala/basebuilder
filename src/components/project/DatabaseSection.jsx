@@ -70,13 +70,11 @@ Return ONLY the JSON, no extra text.`;
         model: 'claude_sonnet_4_6',
         response_json_schema: {
           type: 'object',
-          required: ['entities'],
           properties: {
             entities: {
               type: 'array',
               items: {
                 type: 'object',
-                required: ['name', 'fields'],
                 properties: {
                   name: { type: 'string' },
                   description: { type: 'string' },
@@ -85,7 +83,6 @@ Return ONLY the JSON, no extra text.`;
                     type: 'array',
                     items: {
                       type: 'object',
-                      required: ['name', 'type'],
                       properties: {
                         name: { type: 'string' },
                         type: { type: 'string' },
@@ -103,7 +100,7 @@ Return ONLY the JSON, no extra text.`;
                       type: 'object',
                       properties: {
                         related_entity: { type: 'string' },
-                        type: { type: 'string', enum: ['one_to_one', 'one_to_many', 'many_to_many'] },
+                        type: { type: 'string' },
                         description: { type: 'string' }
                       }
                     }
@@ -115,7 +112,8 @@ Return ONLY the JSON, no extra text.`;
         }
       });
 
-      const ents = result?.entities || [];
+      // Handle both {entities: [...]} and direct array responses
+      const ents = Array.isArray(result) ? result : (result?.entities || []);
       if (ents.length === 0) {
         toast({ title: 'No entities generated', description: 'Please try again — the AI may need more context. Add requirements first or try again.', variant: 'destructive' });
         return;
