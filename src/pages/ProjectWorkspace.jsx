@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, MessageSquare, FileText, Database, Layout,
-  GitBranch, Code, Sparkles, ChevronRight, Users, Rocket, Globe, Zap, Package
+  GitBranch, Code, Sparkles, ChevronRight, Users, Rocket, Globe, Zap, Package, Eye
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
@@ -20,6 +20,7 @@ import AgentRoundtable from '@/components/project/AgentRoundtable';
 import AppDevelopmentSection from '@/components/project/AppDevelopmentSection';
 import DeploySection from '@/components/project/DeploySection';
 import PublishSection from '@/components/project/PublishSection';
+import PreviewSection from '@/components/project/PreviewSection';
 
 const SECTIONS = [
   { key: 'chat', label: 'AI Chat', icon: MessageSquare },
@@ -29,6 +30,7 @@ const SECTIONS = [
   { key: 'pages', label: 'UI/Pages', icon: Layout },
   { key: 'workflows', label: 'Workflows', icon: GitBranch },
   { key: 'apis', label: 'APIs', icon: Code },
+  { key: 'preview', label: 'Preview', icon: Eye },
   { key: 'blueprint', label: 'Blueprint', icon: Sparkles },
   { key: 'development', label: 'Development', icon: Rocket },
   { key: 'deploy', label: 'Deploy', icon: Globe },
@@ -235,6 +237,7 @@ function SectionContent({ section, project, onRefresh }) {
     case 'workflows': return <WorkflowsSection project={project} onRefresh={onRefresh} />;
     case 'apis': return <ApisSection project={project} onRefresh={onRefresh} />;
     case 'roundtable': return <AgentRoundtable project={project} />;
+    case 'preview': return <PreviewSection project={project} onRefresh={onRefresh} />;
     case 'blueprint': return <BlueprintSection project={project} onRefresh={onRefresh} />;
     case 'development': return <AppDevelopmentSection project={project} onRefresh={onRefresh} />;
     case 'deploy': return <DeploySection project={project} onRefresh={onRefresh} />;
