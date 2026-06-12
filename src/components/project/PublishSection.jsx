@@ -260,6 +260,210 @@ Return ONLY a JSON object (no markdown fences):
       setStep('publish', 'done');
 
       // Build generated code bundle
+      // Helper: generate a full CRUD list page for an entity
+      function buildEntityPage(entity) {
+        const name = entity.name;
+        const fields = (entity.fields || []).slice(0, 5);
+        const fieldNames = fields.map(f => f.name).filter(Boolean);
+        const displayField = fieldNames[0] || 'id';
+        const varName = name.charAt(0).toLowerCase() + name.slice(1) + 's';
+        const itemVar = name.charAt(0).toLowerCase() + name.slice(1);
+
+        const tableHeaders = fieldNames.length > 0
+          ? fieldNames.map(f => `              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">${f}</th>`).join('\n')
+          : `              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Name</th>`;
+
+        const tableCells = fieldNames.length > 0
+          ? fieldNames.map(f => `                  <td className="px-4 py-3 text-sm text-gray-700">{String(item.${f} ?? '')}</td>`).join('\n')
+          : `                  <td className="px-4 py-3 text-sm text-gray-700">{item.id}</td>`;
+
+        const formFields = fieldNames.length > 0
+          ? fieldNames.map(f => `
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">${f}</label>
+              <input className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={form.${f} || ''} onChange={e => setForm(p => ({...p, ${f}: e.target.value}))} />
+            </div>`).join('\n')
+          : `
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+              <input className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={form.name || ''} onChange={e => setForm(p => ({...p, name: e.target.value}))} />
+            </div>`;
+
+        const emptyForm = fieldNames.length > 0
+          ? '{' + fieldNames.map(f => `${f}: ''`).join(', ') + '}'
+          : '{name: ""}';
+
+        return `import { useState, useEffect } from 'react'
+
+const API = 'http://localhost:3000/api/${name.toLowerCase()}s'
+
+export default function ${name}Page() {
+  const [${varName}, set${name}s] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState(${emptyForm})
+  const [editing, setEditing] = useState(null)
+
+  useEffect(() => { load() }, [])
+
+  async function load() {
+    setLoading(true)
+    try {
+      const res = await fetch(API)
+      if (res.ok) set${name}s(await res.json())
+    } catch(e) { console.error(e) }
+    setLoading(false)
+  }
+
+  async function save() {
+    const method = editing ? 'PUT' : 'POST'
+    const url = editing ? \`\${API}/\${editing}\` : API
+    await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(form) })
+    setShowForm(false); setEditing(null); setForm(${emptyForm}); load()
+  }
+
+  async function remove(id) {
+    if (!confirm('Delete this record?')) return
+    await fetch(\`\${API}/\${id}\`, { method: 'DELETE' })
+    load()
+  }
+
+  function edit(item) {
+    setForm({...item}); setEditing(item.id); setShowForm(true)
+  }
+
+  return (
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">${name}</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Manage ${name} records</p>
+        </div>
+        <button onClick={() => { setShowForm(true); setEditing(null); setForm(${emptyForm}) }} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
+          + Add ${name}
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md">
+            <h2 className="text-lg font-bold text-gray-900 mb-4">{editing ? 'Edit' : 'New'} ${name}</h2>
+            <div className="space-y-4">
+              ${formFields}
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button onClick={save} className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700">Save</button>
+              <button onClick={() => { setShowForm(false); setEditing(null) }} className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg text-sm font-medium hover:bg-gray-50">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <div className="w-6 h-6 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
+        </div>
+      ) : ${varName}.length === 0 ? (
+        <div className="text-center py-16 border-2 border-dashed border-gray-200 rounded-2xl">
+          <p className="text-gray-400 text-sm">No ${name} records yet.</p>
+          <button onClick={() => setShowForm(true)} className="mt-3 text-blue-600 text-sm font-medium hover:underline">Add the first one</button>
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+${tableHeaders}
+                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {${varName}.map(item => (
+                <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+${tableCells}
+                  <td className="px-4 py-3 text-right">
+                    <button onClick={() => edit(item)} className="text-blue-600 hover:text-blue-800 text-xs font-medium mr-3">Edit</button>
+                    <button onClick={() => remove(item.id)} className="text-red-500 hover:text-red-700 text-xs font-medium">Delete</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}`;
+      }
+
+      // Helper: build the sidebar Layout
+      function buildLayout(pageFiles) {
+        const navLinks = pageFiles.map(p =>
+          `    { path: '${p.route}', label: '${p.label}', icon: '${p.icon}' },`
+        ).join('\n');
+        return `import { Link, useLocation, Outlet } from 'react-router-dom'
+
+const NAV = [
+${navLinks}
+]
+
+export default function Layout() {
+  const { pathname } = useLocation()
+  return (
+    <div className="flex min-h-screen bg-gray-50">
+      <aside className="w-60 bg-gray-900 flex flex-col flex-shrink-0">
+        <div className="px-5 py-5 border-b border-gray-700/50">
+          <h1 className="text-white font-bold text-base truncate">${project.name}</h1>
+          <p className="text-gray-400 text-xs mt-0.5">${project.type?.replace(/_/g, ' ') || 'Application'}</p>
+        </div>
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+          {NAV.map(item => (
+            <Link
+              key={item.path}
+              to={item.path}
+              className={\`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors \${
+                pathname === item.path
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+              }\`}
+            >
+              <span className="text-base">{item.icon}</span>
+              <span>{item.label}</span>
+            </Link>
+          ))}
+        </nav>
+      </aside>
+      <main className="flex-1 overflow-auto">
+        <Outlet />
+      </main>
+    </div>
+  )
+}`;
+      }
+
+      // Helper: build App.jsx wrapping all pages in Layout
+      function buildAppJsx(pageFiles) {
+        const imports = pageFiles.map(p => `import ${p.compName}Page from './pages/${p.compName}.jsx'`).join('\n');
+        const routes = pageFiles.map(p => `          <Route path="${p.route}" element={<${p.compName}Page />} />`).join('\n');
+        return `import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import Layout from './components/Layout.jsx'
+${imports}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route element={<Layout />}>
+${routes}
+        </Route>
+      </Routes>
+    </BrowserRouter>
+  )
+}`;
+      }
+
+      const PAGE_ICONS = ['📊','📦','🛒','👥','⚙️','📋','🔧','📈','🏷️','📁'];
+
       const viteConfig = `import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -352,94 +556,113 @@ export default {
             "  </React.StrictMode>,",
             ")",
           ].join('\n'),
-          'App.jsx': (() => {
-            // Build page list — only pages with safe component names, capped at 8
+          ...(() => {
+            // Build page list: Dashboard + one page per entity (CRUD) + spec pages up to limit
             const pageFiles = [];
-            pages.slice(0, 8).forEach((p, i) => {
-              const compName = p.name.replace(/[^a-zA-Z0-9]/g, '');
+
+            // Dashboard first
+            pageFiles.push({ compName: 'Dashboard', route: '/', label: 'Dashboard', icon: '📊' });
+
+            // One CRUD page per entity
+            entities.slice(0, 6).forEach((e, i) => {
+              const compName = e.name.replace(/[^a-zA-Z0-9]/g, '');
               if (!compName) return;
-              const route = p.route || (i === 0 ? '/' : `/${compName.toLowerCase()}`);
-              pageFiles.push({ compName, route });
+              pageFiles.push({
+                compName,
+                route: `/${compName.toLowerCase()}`,
+                label: e.name,
+                icon: PAGE_ICONS[(i + 1) % PAGE_ICONS.length],
+                entity: e,
+              });
             });
-            if (!pageFiles.some(p => p.compName === 'Dashboard')) {
-              pageFiles.unshift({ compName: 'Dashboard', route: '/' });
-            }
-            const imports = pageFiles.map(p => `import ${p.compName}Page from './pages/${p.compName}.jsx'`).join('\n');
-            const routes = pageFiles.map(p => `        <Route path="${p.route}" element={<${p.compName}Page />} />`).join('\n');
-            return [
-              "import { BrowserRouter, Routes, Route } from 'react-router-dom'",
-              imports,
-              "",
-              "export default function App() {",
-              "  return (",
-              "    <BrowserRouter>",
-              "      <Routes>",
-              routes,
-              "      </Routes>",
-              "    </BrowserRouter>",
-              "  )",
-              "}",
-            ].join('\n');
+
+            // Extra spec pages (non-entity) up to 10 total
+            pages.forEach((p, i) => {
+              if (pageFiles.length >= 10) return;
+              const compName = p.name.replace(/[^a-zA-Z0-9]/g, '');
+              if (!compName || pageFiles.some(pf => pf.compName === compName)) return;
+              pageFiles.push({
+                compName,
+                route: p.route || `/${compName.toLowerCase()}`,
+                label: p.name,
+                icon: PAGE_ICONS[pageFiles.length % PAGE_ICONS.length],
+              });
+            });
+
+            // Dashboard page code
+            const statItems = entities.slice(0, 4).map((e, i) =>
+              `    { label: '${e.name}', icon: '${PAGE_ICONS[(i+1) % PAGE_ICONS.length]}', color: '${['bg-blue-500','bg-emerald-500','bg-violet-500','bg-amber-500'][i % 4]}', route: '/${e.name.replace(/[^a-zA-Z0-9]/g,'').toLowerCase()}' },`
+            ).join('\n');
+
+            const quickLinks = pageFiles.slice(1, 7).map(p =>
+              `            <a href="${p.route}" className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl hover:bg-blue-50 hover:text-blue-700 transition-colors text-sm font-medium text-gray-700 group">
+              <span className="text-xl">${p.icon}</span>
+              <span className="flex-1">${p.label}</span>
+              <span className="text-gray-400 group-hover:text-blue-500">→</span>
+            </a>`
+            ).join('\n');
+
+            const dashboardCode = `import { Link } from 'react-router-dom'
+
+const STATS = [
+${statItems}
+]
+
+export default function DashboardPage() {
+  return (
+    <div className="p-6 max-w-5xl">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+        <p className="text-gray-500 text-sm mt-1">Welcome to ${project.name}</p>
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        {STATS.map(s => (
+          <Link to={s.route} key={s.label} className="bg-white rounded-2xl border border-gray-200 p-5 flex items-center gap-4 hover:border-blue-300 hover:shadow-sm transition-all">
+            <div className={\`w-11 h-11 rounded-xl \${s.color} flex items-center justify-center text-xl flex-shrink-0\`}>{s.icon}</div>
+            <div>
+              <p className="text-xs text-gray-500">{s.label}</p>
+              <p className="text-xl font-bold text-gray-900">—</p>
+            </div>
+          </Link>
+        ))}
+      </div>
+      <div className="bg-white rounded-2xl border border-gray-200 p-5">
+        <h2 className="font-semibold text-gray-900 mb-4">Quick Navigation</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+${quickLinks}
+        </div>
+      </div>
+    </div>
+  )
+}`;
+
+            // Generate files map
+            const files = {
+              'App.jsx': buildAppJsx(pageFiles),
+              'index.css': `@tailwind base;\n@tailwind components;\n@tailwind utilities;\n\nbody { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }`,
+              'components/Layout.jsx': buildLayout(pageFiles),
+              'pages/Dashboard.jsx': dashboardCode,
+            };
+
+            // CRUD pages for each entity
+            pageFiles.filter(p => p.entity).forEach(p => {
+              files[`pages/${p.compName}.jsx`] = buildEntityPage(p.entity);
+            });
+
+            // Stub pages for non-entity spec pages
+            pageFiles.filter(p => !p.entity && p.compName !== 'Dashboard').forEach(p => {
+              files[`pages/${p.compName}.jsx`] = `export default function ${p.compName}Page() {
+  return (
+    <div className="p-6">
+      <h1 className="text-2xl font-bold text-gray-900 mb-2">${p.label}</h1>
+      <p className="text-gray-500">This page is ready to be implemented.</p>
+    </div>
+  )
+}`;
+            });
+
+            return files;
           })(),
-          'index.css': `@tailwind base;\n@tailwind components;\n@tailwind utilities;\n\n@layer base {\n  :root {\n    --background: 0 0% 100%;\n    --foreground: 222.2 84% 4.9%;\n    --primary: 221.2 83.2% 53.3%;\n    --primary-foreground: 210 40% 98%;\n    --muted: 210 40% 96.1%;\n    --muted-foreground: 215.4 16.3% 46.9%;\n    --border: 214.3 31.8% 91.4%;\n    --card: 0 0% 100%;\n    --card-foreground: 222.2 84% 4.9%;\n    --radius: 0.5rem;\n  }\n  * { @apply border-border; }\n  body { @apply bg-background text-foreground; }\n}`,
-          'pages/Dashboard.jsx': (() => {
-            // Always generate our own rich dashboard — LLM output is unreliable
-            return [
-              `export default function DashboardPage() {`,
-              `  const stats = [`,
-              ...entities.slice(0, 4).map((e, i) => `    { label: '${e.name}', value: ${(i + 1) * 12}, color: 'bg-blue-500' },`),
-              `  ];`,
-              `  return (`,
-              `    <div className="min-h-screen bg-gray-50">`,
-              `      <header className="bg-white border-b border-gray-200 px-8 py-4 flex items-center justify-between">`,
-              `        <h1 className="text-xl font-bold text-gray-900">${project.name}</h1>`,
-              `        <span className="text-sm text-gray-500">${project.type?.replace(/_/g, ' ') || 'Application'}</span>`,
-              `      </header>`,
-              `      <main className="p-8">`,
-              `        <h2 className="text-2xl font-bold text-gray-900 mb-2">Dashboard</h2>`,
-              `        <p className="text-gray-500 mb-8">Welcome to ${project.name}</p>`,
-              `        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">`,
-              `          {stats.map((s) => (`,
-              `            <div key={s.label} className="bg-white rounded-xl border border-gray-200 p-5 flex items-center gap-4">`,
-              `              <div className={\`w-10 h-10 rounded-lg \${s.color} opacity-80 flex-shrink-0\`} />`,
-              `              <div>`,
-              `                <p className="text-2xl font-bold text-gray-900">{s.value}</p>`,
-              `                <p className="text-sm text-gray-500">{s.label}</p>`,
-              `              </div>`,
-              `            </div>`,
-              `          ))}`,
-              `        </div>`,
-              `        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">`,
-              `          <div className="bg-white rounded-xl border border-gray-200 p-6">`,
-              `            <h3 className="font-semibold text-gray-900 mb-4">Modules</h3>`,
-              `            <ul className="space-y-2">`,
-              ...pages.slice(0, 6).map(p => `              <li className="flex items-center gap-3 text-sm text-gray-700"><span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />${p.name}</li>`),
-              `            </ul>`,
-              `          </div>`,
-              `          <div className="bg-white rounded-xl border border-gray-200 p-6">`,
-              `            <h3 className="font-semibold text-gray-900 mb-4">Data Entities</h3>`,
-              `            <ul className="space-y-2">`,
-              ...entities.slice(0, 6).map(e => `              <li className="flex items-center gap-3 text-sm text-gray-700"><span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />${e.name}</li>`),
-              `            </ul>`,
-              `          </div>`,
-              `        </div>`,
-              `      </main>`,
-              `    </div>`,
-              `  )`,
-              `}`,
-            ].join('\n');
-          })(),
-          'components/Layout.jsx': (frontendCode?.layout_component || "import { Outlet } from 'react-router-dom'\nexport default function Layout() { return <div><main><Outlet /></main></div> }").replace(/\\n/g, '\n').replace(/\\t/g, '  '),
-          // Stub files for all other pages so App.jsx imports resolve
-          ...Object.fromEntries(
-            pages.slice(0, 8)
-              .map(p => p.name.replace(/[^a-zA-Z0-9]/g, ''))
-              .filter(n => n && n !== 'Dashboard')
-              .map(n => [
-                `pages/${n}.jsx`,
-                `export default function ${n}Page() {\n  return <div className="p-8"><h1 className="text-2xl font-bold">${n.replace(/([A-Z])/g, ' $1').trim()}</h1><p className="text-muted-foreground mt-2">This page is ready to be implemented.</p></div>\n}`,
-              ])
-          ),
         },
         '🗄️ database': {
           'schema.sql': (dbCode?.schema_sql || '-- Schema').replace(/\\n/g, '\n'),
