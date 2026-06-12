@@ -323,18 +323,20 @@ export default {
           'vite.config.js': viteConfig,
           'tailwind.config.js': tailwindConfig,
           'postcss.config.js': postcssConfig,
-          'index.html': frontendCode?.index_html || `<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${project.name}</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
-</html>`,
+          'index.html': [
+            '<!DOCTYPE html>',
+            '<html lang="en">',
+            '  <head>',
+            '    <meta charset="UTF-8" />',
+            '    <meta name="viewport" content="width=device-width, initial-scale=1.0" />',
+            `    <title>${project.name}</title>`,
+            '  </head>',
+            '  <body>',
+            '    <div id="root"></div>',
+            '    <script type="module" src="/src/main.jsx"></script>',
+            '  </body>',
+            '</html>',
+          ].join('\n'),
           '.env.example': envVars.join('\n'),
         },
         '🎨 src': {
@@ -363,7 +365,7 @@ export default {
             "  )",
             "}",
           ].join('\n'),
-          'index.css': frontendCode?.index_css || "@tailwind base;\n@tailwind components;\n@tailwind utilities;",
+          'index.css': frontendCode?.index_css || ["@tailwind base;", "@tailwind components;", "@tailwind utilities;"].join('\n'),
           'pages/Dashboard.jsx': frontendCode?.dashboard_page || `export default function Dashboard() {\n  return <div className="p-8"><h1 className="text-2xl font-bold">${project.name}</h1></div>\n}`,
           'components/Layout.jsx': frontendCode?.layout_component || "import { Outlet } from 'react-router-dom'\nexport default function Layout() { return <div><main><Outlet /></main></div> }",
         },
