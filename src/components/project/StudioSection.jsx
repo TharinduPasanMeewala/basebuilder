@@ -3,6 +3,8 @@ import { MonitorPlay, RefreshCw } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import PreviewFrame from './preview/PreviewFrame';
 import StudioChat from './studio/StudioChat';
+import VisualEditor from './studio/VisualEditor';
+import { MessageSquare, Brush } from 'lucide-react';
 
 export default function StudioSection({ project, onRefresh }) {
   const [entities, setEntities] = useState([]);
@@ -12,6 +14,7 @@ export default function StudioSection({ project, onRefresh }) {
   const [loading, setLoading] = useState(true);
   const [messages, setMessages] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [panel, setPanel] = useState('chat');
 
   useEffect(() => { loadData(); }, [project.id]);
 
@@ -179,6 +182,17 @@ Also write a short friendly reply (1-2 sentences) describing what you did.`,
     setBusy(false);
   };
 
+  const handleDesignChange = async (partial) => {
+    const newDesign = { ...design, ...partial };
+    setDesign(newDesign);
+    await persistDesign(newDesign);
+  };
+
+  const handleAskDesigner = (prompt) => {
+    setPanel('chat');
+    handleSend(`As a professional UI/UX designer: ${prompt}`, [], true);
+  };
+
   if (loading) {
     return <div className="flex items-center justify-center flex-1"><div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" /></div>;
   }
@@ -200,8 +214,28 @@ Also write a short friendly reply (1-2 sentences) describing what you did.`,
 
       {/* Split: chat | preview */}
       <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
-        <div className="w-full md:w-80 lg:w-96 border-b md:border-b-0 md:border-r border-border flex-shrink-0 h-64 md:h-auto bg-card/30">
-          <StudioChat messages={messages} busy={busy} onSend={handleSend} />
+        <div className="w-full md:w-80 lg:w-96 border-b md:border-b-0 md:border-r border-border flex-shrink-0 h-72 md:h-auto bg-card/30 flex flex-col">
+          <div className="flex border-b border-border flex-shrink-0">
+            {[
+              { key: 'chat', label: 'AI Chat', icon: MessageSquare },
+              { key: 'design', label: 'Visual Editor', icon: Brush },
+            ].map(({ key, label, icon: Icon }) => (
+              <button
+                key={key}
+                onClick={() => setPanel(key)}
+                className={`flex-1 flex items-center justify-center gap-1.5 text-[11px] py-2 transition-colors ${
+                  panel === key ? 'text-primary font-semibold border-b-2 border-primary bg-primary/5' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Icon className="w-3 h-3" /> {label}
+              </button>
+            ))}
+          </div>
+          <div className="flex-1 overflow-hidden">
+            {panel === 'chat'
+              ? <StudioChat messages={messages} busy={busy} onSend={handleSend} />
+              : <VisualEditor design={design} onChange={handleDesignChange} onAskDesigner={handleAskDesigner} busy={busy} />}
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto p-4 bg-muted/20">
           <PreviewFrame

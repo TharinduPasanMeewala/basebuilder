@@ -10,14 +10,18 @@ const ICONS = ['📊', '📦', '🛒', '👥', '⚙️', '📋', '🔧', '📈',
 
 function buildEntityPage(entity) {
   const name = entity.name.replace(/[^a-zA-Z0-9]/g, '');
-  const fieldNames = (entity.fields || []).slice(0, 5).map(f => f.name).filter(Boolean);
+  // Sanitize field names: they may contain spaces, slashes, quotes etc.
+  // Always use quoted string keys + bracket access so any field name is valid JS.
+  const fieldNames = (entity.fields || []).slice(0, 5)
+    .map(f => (f.name || '').replace(/['"`\\]/g, '').trim())
+    .filter(Boolean);
   const fields = fieldNames.length > 0 ? fieldNames : ['name'];
-  const emptyForm = '{' + fields.map(f => `${f}: ''`).join(', ') + '}';
+  const emptyForm = '{' + fields.map(f => `'${f}': ''`).join(', ') + '}';
   const headers = fields.map(f => `              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">${f}</th>`).join('\n');
-  const cells = fields.map(f => `                  <td className="px-4 py-3 text-sm text-gray-700">{String(item.${f} ?? '')}</td>`).join('\n');
+  const cells = fields.map(f => `                  <td className="px-4 py-3 text-sm text-gray-700">{String(item['${f}'] ?? '')}</td>`).join('\n');
   const formInputs = fields.map(f => `            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">${f}</label>
-              <input className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={form.${f} || ''} onChange={e => setForm(p => ({...p, ${f}: e.target.value}))} />
+              <input className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={form['${f}'] || ''} onChange={e => setForm(p => ({...p, '${f}': e.target.value}))} />
             </div>`).join('\n');
 
   return `import { useState, useEffect } from 'react'
