@@ -379,13 +379,13 @@ export default {
               "}",
             ].join('\n');
           })(),
-          'index.css': frontendCode?.index_css || ["@tailwind base;", "@tailwind components;", "@tailwind utilities;"].join('\n'),
-          'pages/Dashboard.jsx': frontendCode?.dashboard_page || `export default function DashboardPage() {\n  return <div className="p-8"><h1 className="text-2xl font-bold">${project.name}</h1></div>\n}`,
-          'components/Layout.jsx': frontendCode?.layout_component || "import { Outlet } from 'react-router-dom'\nexport default function Layout() { return <div><main><Outlet /></main></div> }",
+          'index.css': (frontendCode?.index_css || "@tailwind base;\n@tailwind components;\n@tailwind utilities;").replace(/\\n/g, '\n').replace(/\\t/g, '  '),
+          'pages/Dashboard.jsx': (frontendCode?.dashboard_page || `export default function DashboardPage() {\n  return <div className="p-8"><h1 className="text-2xl font-bold">${project.name}</h1></div>\n}`).replace(/\\n/g, '\n').replace(/\\t/g, '  '),
+          'components/Layout.jsx': (frontendCode?.layout_component || "import { Outlet } from 'react-router-dom'\nexport default function Layout() { return <div><main><Outlet /></main></div> }").replace(/\\n/g, '\n').replace(/\\t/g, '  '),
         },
         '🗄️ database': {
-          'schema.sql': dbCode?.schema_sql || '-- Schema',
-          'seed.sql': dbCode?.seed_sql || '-- Seeds',
+          'schema.sql': (dbCode?.schema_sql || '-- Schema').replace(/\\n/g, '\n'),
+          'seed.sql': (dbCode?.seed_sql || '-- Seeds').replace(/\\n/g, '\n'),
         },
       };
 
