@@ -71,6 +71,57 @@ Deno.serve(async (req) => {
       fileCount++;
     }
 
+    // Analyze the cloned code with AI to extract specs (entities, pages, workflows, requirements)
+    const allPaths = [];
+    for (const [sec, files] of Object.entries(sections)) {
+      for (const fn of Object.keys(files)) allPaths.push(sec.replace('📁 ', '') + '/' + fn);
+    }
+    let keySource = '';
+    const priorityPatterns = [/readme\.md$/i, /package\.json$/, /schema|model|entit/i, /router|routes|app\.(jsx?|tsx?|vue)$/i, /pages?\/|views?\//i];
+    const flatFiles = [];
+    for (const files of Object.values(sections)) {
+      for (const [fn, content] of Object.entries(files)) flatFiles.push({ fn, content });
+    }
+    flatFiles.sort((a, b) => {
+      const score = f => priorityPatterns.findIndex(p => p.test(f.fn));
+      const sa = score(a), sb = score(b);
+      return (sa === -1 ? 99 : sa) - (sb === -1 ? 99 : sb);
+    });
+    for (const f of flatFiles) {
+      if (keySource.length > 30000) break;
+      keySource += `\n--- ${f.fn} ---\n${f.content.slice(0, 4000)}\n`;
+    }
+
+    let analysis = { requirements: [], entities: [], pages: [], workflows: [] };
+    try {
+      analysis = await base44.integrations.Core.InvokeLLM({
+        prompt: `Analyze this GitHub repository ("${repoData.full_name}", language: ${repoData.language || 'unknown'}) and reverse-engineer its specification.
+
+File tree:
+${allPaths.slice(0, 250).join('\n')}
+
+Key source files:
+${keySource}
+
+Extract:
+1. requirements: functional requirements the app implements (title, category one of functional/non_functional/business_rule/user_story, description, priority one of critical/high/medium/low)
+2. entities: data models/structures used (name, description, fields [{name, type one of string/number/boolean/date/enum/object/array, required}])
+3. pages: UI pages/views/screens (name, type one of dashboard/list/detail/form/report/settings/auth/landing/kanban/calendar/chart, route, description)
+4. workflows: processes/automations/build steps (name, description, trigger_type one of entity_create/entity_update/scheduled/manual/api_call/event)
+
+Be thorough — extract everything you can identify from the actual code.`,
+        response_json_schema: {
+          type: 'object',
+          properties: {
+            requirements: { type: 'array', items: { type: 'object', properties: { title: { type: 'string' }, category: { type: 'string' }, description: { type: 'string' }, priority: { type: 'string' } } } },
+            entities: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, description: { type: 'string' }, fields: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, type: { type: 'string' }, required: { type: 'boolean' } } } } } } },
+            pages: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, type: { type: 'string' }, route: { type: 'string' }, description: { type: 'string' } } } },
+            workflows: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, description: { type: 'string' }, trigger_type: { type: 'string' } } } },
+          },
+        },
+      });
+    } catch (_e) { /* analysis is best-effort; cloning still succeeds */ }
+
     // Create the project + publish_state version holding the cloned codebase
     const project = await base44.entities.Project.create({
       name: projectName || repoData.name,
@@ -102,7 +153,64 @@ Deno.serve(async (req) => {
       },
     });
 
-    return Response.json({ projectId: project.id, fileCount, skipped, totalKb: Math.round(totalSize / 1024) });
+    // Populate spec sections from the AI analysis
+    const REQ_CATS = ['functional', 'non_functional', 'business_rule', 'user_story', 'constraint', 'assumption'];
+    const REQ_PRIOS = ['critical', 'high', 'medium', 'low'];
+    const PAGE_TYPES = ['dashboard', 'list', 'detail', 'form', 'report', 'settings', 'auth', 'landing', 'kanban', 'calendar', 'chart'];
+    const WF_TRIGGERS = ['entity_create', 'entity_update', 'entity_delete', 'scheduled', 'manual', 'api_call', 'event'];
+
+    if (analysis.requirements?.length) {
+      await base44.entities.Requirement.bulkCreate(analysis.requirements.slice(0, 40).map(r => ({
+        project_id: project.id,
+        title: String(r.title || '').slice(0, 200),
+        category: REQ_CATS.includes(r.category) ? r.category : 'functional',
+        description: r.description || '',
+        priority: REQ_PRIOS.includes(r.priority) ? r.priority : 'medium',
+        status: 'confirmed',
+        source: 'imported',
+      })));
+    }
+    if (analysis.entities?.length) {
+      await base44.entities.DataEntity.bulkCreate(analysis.entities.slice(0, 30).map(e => ({
+        project_id: project.id,
+        name: String(e.name || 'Entity').slice(0, 100),
+        description: e.description || '',
+        fields: (e.fields || []).map(f => ({ name: f.name, type: f.type, required: !!f.required })),
+        source: 'ai_generated',
+      })));
+    }
+    if (analysis.pages?.length) {
+      await base44.entities.PageSpec.bulkCreate(analysis.pages.slice(0, 30).map(p => ({
+        project_id: project.id,
+        name: String(p.name || 'Page').slice(0, 100),
+        type: PAGE_TYPES.includes(p.type) ? p.type : 'list',
+        route: p.route || '',
+        description: p.description || '',
+        source: 'ai_generated',
+      })));
+    }
+    if (analysis.workflows?.length) {
+      await base44.entities.WorkflowSpec.bulkCreate(analysis.workflows.slice(0, 20).map(w => ({
+        project_id: project.id,
+        name: String(w.name || 'Workflow').slice(0, 100),
+        description: w.description || '',
+        trigger_type: WF_TRIGGERS.includes(w.trigger_type) ? w.trigger_type : 'manual',
+        source: 'ai_generated',
+      })));
+    }
+
+    return Response.json({
+      projectId: project.id,
+      fileCount,
+      skipped,
+      totalKb: Math.round(totalSize / 1024),
+      specs: {
+        requirements: analysis.requirements?.length || 0,
+        entities: analysis.entities?.length || 0,
+        pages: analysis.pages?.length || 0,
+        workflows: analysis.workflows?.length || 0,
+      },
+    });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }
