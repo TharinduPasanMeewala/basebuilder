@@ -338,30 +338,34 @@ export default {
           '.env.example': envVars.join('\n'),
         },
         '🎨 src': {
-          'main.jsx': frontendCode?.main_jsx || `import React from 'react'
-import ReactDOM from 'react-dom/client'
-import App from './App.jsx'
-import './index.css'
-
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-)`,
-          'App.jsx': frontendCode?.app_jsx || `import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import Dashboard from './pages/Dashboard.jsx'
-export default function App() {
-  return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Dashboard />} />
-      </Routes>
-    </BrowserRouter>
-  )
-}`,
-          'index.css': frontendCode?.index_css || `@tailwind base;\n@tailwind components;\n@tailwind utilities;`,
-          'pages/Dashboard.jsx': frontendCode?.dashboard_page || `export default function Dashboard() { return <div className="p-8"><h1 className="text-2xl font-bold">${project.name}</h1></div> }`,
-          'components/Layout.jsx': frontendCode?.layout_component || `import { Outlet } from 'react-router-dom'\nexport default function Layout() { return <div><main><Outlet /></main></div> }`,
+          'main.jsx': [
+            "import React from 'react'",
+            "import ReactDOM from 'react-dom/client'",
+            "import App from './App.jsx'",
+            "import './index.css'",
+            "",
+            "ReactDOM.createRoot(document.getElementById('root')).render(",
+            "  <React.StrictMode>",
+            "    <App />",
+            "  </React.StrictMode>,",
+            ")",
+          ].join('\n'),
+          'App.jsx': frontendCode?.app_jsx || [
+            "import { BrowserRouter, Routes, Route } from 'react-router-dom'",
+            "import Dashboard from './pages/Dashboard.jsx'",
+            "export default function App() {",
+            "  return (",
+            "    <BrowserRouter>",
+            "      <Routes>",
+            "        <Route path=\"/\" element={<Dashboard />} />",
+            "      </Routes>",
+            "    </BrowserRouter>",
+            "  )",
+            "}",
+          ].join('\n'),
+          'index.css': frontendCode?.index_css || "@tailwind base;\n@tailwind components;\n@tailwind utilities;",
+          'pages/Dashboard.jsx': frontendCode?.dashboard_page || `export default function Dashboard() {\n  return <div className="p-8"><h1 className="text-2xl font-bold">${project.name}</h1></div>\n}`,
+          'components/Layout.jsx': frontendCode?.layout_component || "import { Outlet } from 'react-router-dom'\nexport default function Layout() { return <div><main><Outlet /></main></div> }",
         },
         '🗄️ database': {
           'schema.sql': dbCode?.schema_sql || '-- Schema',
