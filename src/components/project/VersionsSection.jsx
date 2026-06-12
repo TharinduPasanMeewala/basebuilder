@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { History, Save, RotateCcw, Loader2, Trash2, Clock, FileText, Database, Layout, GitBranch, Code, Check } from 'lucide-react';
+import { History, Save, RotateCcw, Loader2, Trash2, Clock, FileText, Database, Layout, GitBranch, Code, Check, Github, Rocket, ExternalLink } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
+import { generateCodeFiles } from '@/lib/codegen';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -30,6 +31,7 @@ export default function VersionsSection({ project, onRefresh }) {
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [restoringId, setRestoringId] = useState(null);
+  const [publishingId, setPublishingId] = useState(null);
   const [confirmRestore, setConfirmRestore] = useState(null);
   const [justRestored, setJustRestored] = useState(null);
 
@@ -104,6 +106,27 @@ export default function VersionsSection({ project, onRefresh }) {
     onRefresh?.();
   };
 
+  const publishVersion = async (version) => {
+    setPublishingId(version.id);
+    try {
+      const files = generateCodeFiles(project, version.snapshot || {});
+      const res = await base44.functions.invoke('pushToGitHub', {
+        projectName: `${project.name}-v${version.version_number}`,
+        files,
+        isPrivate: false,
+      });
+      if (res.data?.repoUrl) {
+        await base44.entities.ProjectVersion.update(version.id, {
+          snapshot: { ...version.snapshot, github_url: res.data.repoUrl },
+        });
+        await loadVersions();
+      }
+    } catch (e) {
+      alert('Publish failed: ' + (e.response?.data?.error || e.message));
+    }
+    setPublishingId(null);
+  };
+
   const deleteVersion = async (id) => {
     if (!window.confirm('Delete this version permanently?')) return;
     await base44.entities.ProjectVersion.delete(id);
@@ -167,21 +190,31 @@ export default function VersionsSection({ project, onRefresh }) {
                         {v.phase && <span className="ml-1 capitalize">· {v.phase} phase</span>}
                       </p>
                     </div>
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end">
                       <Button
                         size="sm"
                         variant="outline"
                         className="h-7 text-xs gap-1.5"
                         onClick={() => setConfirmRestore(v)}
-                        disabled={restoringId !== null}
+                        disabled={restoringId !== null || publishingId !== null}
                       >
                         {restoringId === v.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
                         {restoringId === v.id ? 'Restoring…' : 'Restore'}
                       </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs gap-1.5"
+                        onClick={() => publishVersion(v)}
+                        disabled={restoringId !== null || publishingId !== null}
+                      >
+                        {publishingId === v.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Rocket className="w-3.5 h-3.5" />}
+                        {publishingId === v.id ? 'Publishing…' : v.snapshot?.github_url ? 'Re-publish' : 'Publish'}
+                      </Button>
                       <button
                         onClick={() => deleteVersion(v.id)}
                         className="text-muted-foreground hover:text-destructive transition-colors p-1"
-                        disabled={restoringId !== null}
+                        disabled={restoringId !== null || publishingId !== null}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -194,6 +227,19 @@ export default function VersionsSection({ project, onRefresh }) {
                       </span>
                     ))}
                   </div>
+                  {v.snapshot?.github_url && (
+                    <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-border">
+                      <a href={v.snapshot.github_url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-[11px] text-primary hover:underline font-medium">
+                        <Github className="w-3.5 h-3.5" /> GitHub Repo <ExternalLink className="w-2.5 h-2.5" />
+                      </a>
+                      <a href={`https://vercel.com/new/clone?repository-url=${encodeURIComponent(v.snapshot.github_url)}`} target="_blank" rel="noreferrer">
+                        <img src="https://vercel.com/button" alt="Deploy with Vercel" className="h-6" />
+                      </a>
+                      <a href={`https://app.netlify.com/start/deploy?repository=${encodeURIComponent(v.snapshot.github_url)}`} target="_blank" rel="noreferrer">
+                        <img src="https://www.netlify.com/img/deploy/button.svg" alt="Deploy to Netlify" className="h-6" />
+                      </a>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
