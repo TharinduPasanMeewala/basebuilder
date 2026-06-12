@@ -9,11 +9,13 @@ Deno.serve(async (req) => {
     const { repoUrl } = await req.json();
     if (!repoUrl) return Response.json({ error: 'repoUrl is required' }, { status: 400 });
 
-    // Parse owner/repo from URL like https://github.com/owner/repo
-    const match = repoUrl.replace(/\/$/, '').match(/github\.com\/([^/]+)\/([^/]+)/);
+    // Parse owner/repo from URL like https://github.com/owner/repo(.git)
+    const cleaned = repoUrl.trim().replace(/[?#].*$/, '').replace(/\/+$/, '');
+    const match = cleaned.match(/github\.com\/([^/]+)\/([^/]+)/);
     if (!match) return Response.json({ error: 'Invalid GitHub repo URL' }, { status: 400 });
 
-    const [, owner, repo] = match;
+    const owner = match[1];
+    const repo = match[2].replace(/\.git$/, '');
     const headers = {
       'Accept': 'application/vnd.github+json',
       'User-Agent': 'ArchitectAI',
