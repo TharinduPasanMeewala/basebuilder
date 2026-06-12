@@ -32,6 +32,7 @@ export default function ImportFromGitHub({ open, onClose }) {
   const handleImport = async () => {
     if (!repoData) return;
     setCreating(true);
+    setError('');
     const description = [
       repoData.description,
       repoData.techHints.length ? `Tech: ${repoData.techHints.join(', ')}` : '',
@@ -39,16 +40,18 @@ export default function ImportFromGitHub({ open, onClose }) {
       repoData.readme ? `\n\nREADME:\n${repoData.readme.slice(0, 500)}` : '',
     ].filter(Boolean).join('\n');
 
-    const project = await base44.entities.Project.create({
-      name: repoData.name,
-      description: description.slice(0, 1000),
-      type: 'custom_application',
-      phase: 'discovery',
-      status: 'active',
-      completeness_score: 0,
-      version_count: 1,
-    });
-    navigate(`/projects/${project.id}`);
+    try {
+      const res = await base44.functions.invoke('cloneFromGitHub', {
+        repoUrl: repoUrl.trim(),
+        projectName: repoData.name,
+        projectDescription: description.slice(0, 1000),
+      });
+      if (res.data?.error) throw new Error(res.data.error);
+      navigate(`/projects/${res.data.projectId}`);
+    } catch (e) {
+      setError(e.response?.data?.error || e.message || 'Failed to clone repository');
+      setCreating(false);
+    }
   };
 
   const handleClose = () => {
@@ -135,7 +138,7 @@ export default function ImportFromGitHub({ open, onClose }) {
 
               <Button className="w-full gap-2 mt-1" onClick={handleImport} disabled={creating}>
                 {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Github className="w-4 h-4" />}
-                {creating ? 'Creating project…' : 'Import as New Project'}
+                {creating ? 'Cloning all files…' : 'Clone as New Project'}
               </Button>
             </div>
           )}
