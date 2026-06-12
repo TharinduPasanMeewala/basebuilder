@@ -381,10 +381,10 @@ export default {
               "}",
             ].join('\n');
           })(),
-          'index.css': (frontendCode?.index_css || "@tailwind base;\n@tailwind components;\n@tailwind utilities;").replace(/\\n/g, '\n').replace(/\\t/g, '  '),
-          'pages/Dashboard.jsx': (frontendCode?.dashboard_page
-            ? frontendCode.dashboard_page.replace(/\\n/g, '\n').replace(/\\t/g, '  ')
-            : [
+          'index.css': `@tailwind base;\n@tailwind components;\n@tailwind utilities;\n\n@layer base {\n  :root {\n    --background: 0 0% 100%;\n    --foreground: 222.2 84% 4.9%;\n    --primary: 221.2 83.2% 53.3%;\n    --primary-foreground: 210 40% 98%;\n    --muted: 210 40% 96.1%;\n    --muted-foreground: 215.4 16.3% 46.9%;\n    --border: 214.3 31.8% 91.4%;\n    --card: 0 0% 100%;\n    --card-foreground: 222.2 84% 4.9%;\n    --radius: 0.5rem;\n  }\n  * { @apply border-border; }\n  body { @apply bg-background text-foreground; }\n}`,
+          'pages/Dashboard.jsx': (() => {
+            // Always generate our own rich dashboard — LLM output is unreliable
+            return [
               `export default function DashboardPage() {`,
               `  const stats = [`,
               ...entities.slice(0, 4).map((e, i) => `    { label: '${e.name}', value: ${(i + 1) * 12}, color: 'bg-blue-500' },`),
@@ -427,7 +427,8 @@ export default {
               `    </div>`,
               `  )`,
               `}`,
-            ].join('\n')),
+            ].join('\n');
+          })(),
           'components/Layout.jsx': (frontendCode?.layout_component || "import { Outlet } from 'react-router-dom'\nexport default function Layout() { return <div><main><Outlet /></main></div> }").replace(/\\n/g, '\n').replace(/\\t/g, '  '),
           // Stub files for all other pages so App.jsx imports resolve
           ...Object.fromEntries(
