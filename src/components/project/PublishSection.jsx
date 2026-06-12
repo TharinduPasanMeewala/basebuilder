@@ -352,21 +352,35 @@ export default {
             "  </React.StrictMode>,",
             ")",
           ].join('\n'),
-          'App.jsx': frontendCode?.app_jsx || [
-            "import { BrowserRouter, Routes, Route } from 'react-router-dom'",
-            "import Dashboard from './pages/Dashboard.jsx'",
-            "export default function App() {",
-            "  return (",
-            "    <BrowserRouter>",
-            "      <Routes>",
-            "        <Route path=\"/\" element={<Dashboard />} />",
-            "      </Routes>",
-            "    </BrowserRouter>",
-            "  )",
-            "}",
-          ].join('\n'),
+          'App.jsx': (() => {
+            // Always generate a safe App.jsx that only imports pages we actually have in the bundle
+            const pageFiles = pages.slice(0, 8).map((p, i) => {
+              const compName = p.name.replace(/[^a-zA-Z0-9]/g, '');
+              const route = p.route || (i === 0 ? '/' : `/${compName.toLowerCase()}`);
+              return { compName, route, filename: `${compName}Page` };
+            });
+            // Always include Dashboard
+            const hasDashboard = pageFiles.some(p => p.compName === 'Dashboard');
+            if (!hasDashboard) pageFiles.unshift({ compName: 'Dashboard', route: '/', filename: 'DashboardPage' });
+            const imports = pageFiles.map(p => `import ${p.filename} from './pages/${p.compName}.jsx'`).join('\n');
+            const routes = pageFiles.map(p => `        <Route path="${p.route}" element={<${p.filename} />} />`).join('\n');
+            return [
+              "import { BrowserRouter, Routes, Route } from 'react-router-dom'",
+              imports,
+              "",
+              "export default function App() {",
+              "  return (",
+              "    <BrowserRouter>",
+              "      <Routes>",
+              routes,
+              "      </Routes>",
+              "    </BrowserRouter>",
+              "  )",
+              "}",
+            ].join('\n');
+          })(),
           'index.css': frontendCode?.index_css || ["@tailwind base;", "@tailwind components;", "@tailwind utilities;"].join('\n'),
-          'pages/Dashboard.jsx': frontendCode?.dashboard_page || `export default function Dashboard() {\n  return <div className="p-8"><h1 className="text-2xl font-bold">${project.name}</h1></div>\n}`,
+          'pages/Dashboard.jsx': frontendCode?.dashboard_page || `export default function DashboardPage() {\n  return <div className="p-8"><h1 className="text-2xl font-bold">${project.name}</h1></div>\n}`,
           'components/Layout.jsx': frontendCode?.layout_component || "import { Outlet } from 'react-router-dom'\nexport default function Layout() { return <div><main><Outlet /></main></div> }",
         },
         '🗄️ database': {
