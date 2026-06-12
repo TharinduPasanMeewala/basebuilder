@@ -19,13 +19,20 @@ Deno.serve(async (req) => {
 
     // 1. Get authenticated user info
     const userRes = await fetch('https://api.github.com/user', { headers });
-    if (!userRes.ok) return Response.json({ error: 'Invalid GitHub token' }, { status: 400 });
+    if (!userRes.ok) {
+      const errBody = await userRes.text();
+      return Response.json({ error: 'Invalid GitHub token: ' + errBody }, { status: 400 });
+    }
     const ghUser = await userRes.json();
     const owner = ghUser.login;
 
-    const slug = repoName || projectName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+    const slug = (repoName || projectName)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 40);
 
-    // 2. Create repo (ignore error if already exists)
+    // 2. Create repo (ignore 422 if already exists)
     const createRes = await fetch('https://api.github.com/user/repos', {
       method: 'POST',
       headers,
@@ -42,40 +49,65 @@ Deno.serve(async (req) => {
       const repo = await createRes.json();
       repoUrl = repo.html_url;
     } else {
-      // Repo may already exist
       repoUrl = `https://github.com/${owner}/${slug}`;
+    }
+
+    // Small helper: safely base64-encode UTF-8 content
+    function encodeContent(str) {
+      const bytes = new TextEncoder().encode(str || '');
+      let binary = '';
+      for (const b of bytes) binary += String.fromCharCode(b);
+      return btoa(binary);
     }
 
     // 3. Commit each file via the Contents API
     const results = [];
     for (const file of files) {
-      const content = btoa(unescape(encodeURIComponent(file.content || '')));
       const filePath = file.path.startsWith('/') ? file.path.slice(1) : file.path;
+      let content;
+      try {
+        content = encodeContent(file.content || '');
+      } catch (e) {
+        results.push({ path: filePath, ok: false, error: 'encoding failed' });
+        continue;
+      }
 
       // Check if file exists to get sha for update
       let sha;
-      const checkRes = await fetch(`https://api.github.com/repos/${owner}/${slug}/contents/${filePath}`, { headers });
-      if (checkRes.ok) {
-        const existing = await checkRes.json();
-        sha = existing.sha;
+      try {
+        const checkRes = await fetch(
+          `https://api.github.com/repos/${owner}/${slug}/contents/${filePath}`,
+          { headers }
+        );
+        if (checkRes.ok) {
+          const existing = await checkRes.json();
+          sha = existing.sha;
+        }
+      } catch (_) { /* file doesn't exist yet, no sha needed */ }
+
+      const putRes = await fetch(
+        `https://api.github.com/repos/${owner}/${slug}/contents/${filePath}`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({
+            message: `Add ${filePath}`,
+            content,
+            ...(sha ? { sha } : {}),
+          }),
+        }
+      );
+
+      const ok = putRes.ok;
+      if (!ok) {
+        const errText = await putRes.text();
+        results.push({ path: filePath, ok: false, error: errText.slice(0, 200) });
+      } else {
+        results.push({ path: filePath, ok: true });
       }
-
-      const body = {
-        message: `Add ${filePath}`,
-        content,
-        ...(sha ? { sha } : {}),
-      };
-
-      const putRes = await fetch(`https://api.github.com/repos/${owner}/${slug}/contents/${filePath}`, {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify(body),
-      });
-
-      results.push({ path: filePath, ok: putRes.ok });
     }
 
-    const failed = results.filter(r => !r.ok).length;
+    const failed = results.filter(r => !r.ok);
 
     return Response.json({
       repoUrl,
@@ -83,9 +115,10 @@ Deno.serve(async (req) => {
       repoName: slug,
       totalFiles: files.length,
       committed: results.filter(r => r.ok).length,
-      failed,
+      failed: failed.length,
+      failedFiles: failed.map(f => f.path),
     });
   } catch (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ error: error.message, stack: error.stack?.slice(0, 500) }, { status: 500 });
   }
 });

@@ -156,7 +156,7 @@ export default function PublishedApp() {
         }
       }
     } catch (e) {
-      alert('GitHub push failed: ' + e.message);
+      alert('GitHub push failed: ' + (e.response?.data?.error || e.message));
     }
     setPushingGitHub(false);
   };
