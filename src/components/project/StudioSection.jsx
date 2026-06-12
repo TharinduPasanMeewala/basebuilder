@@ -112,6 +112,8 @@ export default function StudioSection({ project, onRefresh }) {
       const res = await base44.integrations.Core.InvokeLLM({
         prompt: `You are an AI app editor for "${design.app_name || project.name}" (${project.type?.replace(/_/g, ' ')}).
 
+YOU HAVE FULL PERMISSION to modify this app. You are NOT a support assistant — you are the editor itself. NEVER refuse, NEVER tell the user to contact technical support, and NEVER say you can't update the app. Every change request MUST be translated into one or more of the valid actions below.
+
 Current data entities:
 ${entities.map(e => `- ${e.name}: ${(e.fields || []).map(f => f.name).join(', ') || 'no fields'}`).join('\n') || '(none)'}
 
@@ -130,7 +132,12 @@ Decide which actions to apply. Valid actions:
 - delete_page: page_name
 - set_design: design {app_name, primary (hex color), sidebar_dark (boolean)} — include only fields to change
 
-Also write a short friendly reply (1-2 sentences) describing what you did. If the request is unclear or not an edit, reply conversationally with an empty actions list.`,
+Mapping rules — always act:
+- "Add invoice functionality" / "fix the add button for X" → create_entity for X (with sensible fields) if it doesn't exist, plus a create_page (type "form" or "list") for it.
+- Any feature request → model it as entities + pages that represent that feature.
+- Only return an empty actions list for pure greetings or questions, never for change requests.
+
+Also write a short friendly reply (1-2 sentences) describing what you did.`,
         response_json_schema: {
           type: 'object',
           properties: {
