@@ -111,7 +111,7 @@ export default function VersionsSection({ project, onRefresh }) {
     try {
       const files = generateCodeFiles(project, version.snapshot || {});
       const res = await base44.functions.invoke('pushToGitHub', {
-        projectName: `${project.name}-v${version.version_number}`,
+        projectName: project.name,
         files,
         isPrivate: false,
       });
