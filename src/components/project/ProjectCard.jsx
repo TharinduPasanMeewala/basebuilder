@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageSquare, Calendar, Layers, ArrowRight, MoreHorizontal, Archive } from 'lucide-react';
+import { MessageSquare, Calendar, Layers, ArrowRight, MoreHorizontal, Archive, Package } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -103,6 +103,15 @@ export default function ProjectCard({ project, onDeleted }) {
           <span>{new Date(project.created_date).toLocaleDateString()}</span>
         </div>
       </div>
+
+      {project.phase === 'completed' && (
+        <button
+          onClick={e => { e.stopPropagation(); navigate(`/projects/${project.id}/published`); }}
+          className="mt-3 w-full flex items-center justify-center gap-1.5 text-xs font-medium text-primary bg-primary/8 hover:bg-primary/15 border border-primary/20 rounded-lg py-1.5 transition-colors"
+        >
+          <Package className="w-3.5 h-3.5" /> View Code Package
+        </button>
+      )}
     </div>
   );
 }

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, MessageSquare, FileText, Database, Layout,
-  GitBranch, Code, Sparkles, ChevronRight, Users, Rocket, Globe, Zap
+  GitBranch, Code, Sparkles, ChevronRight, Users, Rocket, Globe, Zap, Package
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
@@ -141,6 +141,17 @@ export default function ProjectWorkspace() {
               </div>
               <span className="font-medium text-foreground">{score}%</span>
             </div>
+            {project.phase === 'completed' && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs gap-1.5 text-primary border-primary/30"
+                onClick={() => navigate(`/projects/${id}/published`)}
+              >
+                <Package className="w-3.5 h-3.5" />
+                Code Package
+              </Button>
+            )}
             <Button
               size="sm"
               variant="outline"
