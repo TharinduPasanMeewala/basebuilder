@@ -1,12 +1,5 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
-
 Deno.serve(async (req) => {
   try {
-    const base44 = createClientFromRequest(req);
-    let user;
-    try { user = await base44.auth.me(); } catch (_) {}
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-
     const { projectName, files, repoName, isPrivate = false } = await req.json();
     const token = Deno.env.get('GITHUB_TOKEN');
 
