@@ -30,6 +30,7 @@ export default function VersionsSection({ project, onRefresh }) {
   const [label, setLabel] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+  const [autoSync, setAutoSync] = useState(true);
   const [restoringId, setRestoringId] = useState(null);
   const [publishingId, setPublishingId] = useState(null);
   const [confirmRestore, setConfirmRestore] = useState(null);
@@ -58,7 +59,7 @@ export default function VersionsSection({ project, onRefresh }) {
       apis: apis.map(stripRecord),
     };
     const maxNum = versions.reduce((m, v) => Math.max(m, v.version_number || 0), 0);
-    await base44.entities.ProjectVersion.create({
+    const created = await base44.entities.ProjectVersion.create({
       project_id: project.id,
       version_number: maxNum + 1,
       label: label || `Version ${maxNum + 1}`,
@@ -71,8 +72,11 @@ export default function VersionsSection({ project, onRefresh }) {
     setLabel('');
     setNotes('');
     setSaving(false);
-    loadVersions();
+    await loadVersions();
     onRefresh?.();
+    if (autoSync) {
+      await publishVersion(created);
+    }
   };
 
   const restoreVersion = async (version) => {
@@ -267,6 +271,18 @@ export default function VersionsSection({ project, onRefresh }) {
             <p className="text-[11px] text-muted-foreground bg-muted/40 rounded-lg p-2.5">
               Saves a full snapshot: requirements, data model, pages, workflows and APIs.
             </p>
+            <label className="flex items-start gap-2.5 bg-primary/5 border border-primary/20 rounded-lg p-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={autoSync}
+                onChange={e => setAutoSync(e.target.checked)}
+                className="mt-0.5 accent-[hsl(var(--primary))]"
+              />
+              <span>
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-foreground"><Github className="w-3.5 h-3.5" /> Auto-sync to GitHub</span>
+                <span className="text-[11px] text-muted-foreground block mt-0.5">Pushes this version's code to your repo — your connected Vercel/Netlify deployment redeploys automatically.</span>
+              </span>
+            </label>
             <Button onClick={saveVersion} disabled={saving} className="w-full gap-2">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               {saving ? 'Saving snapshot…' : 'Save Version'}
