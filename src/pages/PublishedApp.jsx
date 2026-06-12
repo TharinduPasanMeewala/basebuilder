@@ -31,7 +31,8 @@ function getFileIcon(filename) {
 // Section folder → real path prefix for zip
 const SECTION_PATHS = {
   '⚙️ config': '',
-  '🎨 frontend/src': 'src/',
+  '🎨 src': 'src/',
+  '🎨 frontend/src': 'src/',   // legacy
   '🔧 backend/server': 'server/',
   '🗄️ database': 'database/',
 };

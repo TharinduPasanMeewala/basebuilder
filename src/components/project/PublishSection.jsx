@@ -262,19 +262,13 @@ Return ONLY a JSON object (no markdown fences):
       // Build generated code bundle
       const viteConfig = `import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-    },
-  },
 })`;
 
       const tailwindConfig = `/** @type {import('tailwindcss').Config} */
-module.exports = {
+export default {
   darkMode: ['class'],
   content: ['./index.html', './src/**/*.{ts,tsx,js,jsx}'],
   theme: {
@@ -289,7 +283,7 @@ module.exports = {
       },
     },
   },
-  plugins: [require('tailwindcss-animate')],
+  plugins: [],
 }`;
 
       const packageJson = JSON.stringify({
@@ -300,19 +294,12 @@ module.exports = {
           dev: 'vite',
           build: 'vite build',
           preview: 'vite preview',
-          'server:dev': 'nodemon server/index.js',
         },
         dependencies: {
           react: '^18.2.0',
           'react-dom': '^18.2.0',
           'react-router-dom': '^6.26.0',
           'lucide-react': '^0.475.0',
-          express: '^4.18.2',
-          cors: '^2.8.5',
-          dotenv: '^16.0.0',
-          jsonwebtoken: '^9.0.0',
-          ...(dbStack === 'PostgreSQL' ? { pg: '^8.11.0' } : {}),
-          ...(dbStack === 'MongoDB' ? { mongoose: '^7.0.0' } : {}),
         },
         devDependencies: {
           '@vitejs/plugin-react': '^4.2.1',
@@ -320,15 +307,22 @@ module.exports = {
           tailwindcss: '^3.4.0',
           autoprefixer: '^10.4.17',
           postcss: '^8.4.35',
-          nodemon: '^3.0.0',
         },
       }, null, 2);
+
+      const postcssConfig = `export default {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}`;
 
       const code = {
         '⚙️ config': {
           'package.json': packageJson,
           'vite.config.js': viteConfig,
           'tailwind.config.js': tailwindConfig,
+          'postcss.config.js': postcssConfig,
           'index.html': frontendCode?.index_html || `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -343,7 +337,7 @@ module.exports = {
 </html>`,
           '.env.example': envVars.join('\n'),
         },
-        '🎨 frontend/src': {
+        '🎨 src': {
           'main.jsx': frontendCode?.main_jsx || `import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
@@ -354,21 +348,24 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <App />
   </React.StrictMode>,
 )`,
-          'App.jsx': frontendCode?.app_jsx || '// App router',
+          'App.jsx': frontendCode?.app_jsx || `import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import Dashboard from './pages/Dashboard.jsx'
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Dashboard />} />
+      </Routes>
+    </BrowserRouter>
+  )
+}`,
           'index.css': frontendCode?.index_css || `@tailwind base;\n@tailwind components;\n@tailwind utilities;`,
-          'pages/Dashboard.jsx': frontendCode?.dashboard_page || '// Dashboard page',
-          'components/Layout.jsx': frontendCode?.layout_component || '// Layout component',
-        },
-        '🔧 backend/server': {
-          'index.js': backendCode?.index_js || '// Express entry point',
-          'routes/index.js': backendCode?.routes_js || '// Route handlers',
-          'middleware/auth.js': backendCode?.middleware_js || '// Middleware',
-          'automations/workflows.js': automationCode,
+          'pages/Dashboard.jsx': frontendCode?.dashboard_page || `export default function Dashboard() { return <div className="p-8"><h1 className="text-2xl font-bold">${project.name}</h1></div> }`,
+          'components/Layout.jsx': frontendCode?.layout_component || `import { Outlet } from 'react-router-dom'\nexport default function Layout() { return <div><main><Outlet /></main></div> }`,
         },
         '🗄️ database': {
           'schema.sql': dbCode?.schema_sql || '-- Schema',
           'seed.sql': dbCode?.seed_sql || '-- Seeds',
-          'models.js': dbCode?.orm_models || '// ORM models',
         },
       };
 
