@@ -294,6 +294,32 @@ export default function PublishedApp() {
             </Button>
           </div>
 
+          {/* Deploy buttons — shown once GitHub repo exists */}
+          {githubUrl && (
+            <div className="flex flex-wrap gap-3 justify-center mb-3">
+              <a
+                href={`https://vercel.com/new/clone?repository-url=${encodeURIComponent(githubUrl)}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <img src="https://vercel.com/button" alt="Deploy with Vercel" className="h-8" />
+              </a>
+              <a
+                href={`https://app.netlify.com/start/deploy?repository=${encodeURIComponent(githubUrl)}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <img src="https://www.netlify.com/img/deploy/button.svg" alt="Deploy to Netlify" className="h-8" />
+              </a>
+            </div>
+          )}
+
+          {!githubUrl && (
+            <p className="text-xs text-muted-foreground mb-3">
+              Push to GitHub first to unlock one-click deploy to Vercel & Netlify.
+            </p>
+          )}
+
           {driveUrl && (
             <a href={driveUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline">
               <ExternalLink className="w-3 h-3" /> Open folder in Google Drive
