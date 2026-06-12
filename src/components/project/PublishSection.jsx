@@ -353,17 +353,19 @@ export default {
             ")",
           ].join('\n'),
           'App.jsx': (() => {
-            // Always generate a safe App.jsx that only imports pages we actually have in the bundle
-            const pageFiles = pages.slice(0, 8).map((p, i) => {
+            // Build page list — only pages with safe component names, capped at 8
+            const pageFiles = [];
+            pages.slice(0, 8).forEach((p, i) => {
               const compName = p.name.replace(/[^a-zA-Z0-9]/g, '');
+              if (!compName) return;
               const route = p.route || (i === 0 ? '/' : `/${compName.toLowerCase()}`);
-              return { compName, route, filename: `${compName}Page` };
+              pageFiles.push({ compName, route });
             });
-            // Always include Dashboard
-            const hasDashboard = pageFiles.some(p => p.compName === 'Dashboard');
-            if (!hasDashboard) pageFiles.unshift({ compName: 'Dashboard', route: '/', filename: 'DashboardPage' });
-            const imports = pageFiles.map(p => `import ${p.filename} from './pages/${p.compName}.jsx'`).join('\n');
-            const routes = pageFiles.map(p => `        <Route path="${p.route}" element={<${p.filename} />} />`).join('\n');
+            if (!pageFiles.some(p => p.compName === 'Dashboard')) {
+              pageFiles.unshift({ compName: 'Dashboard', route: '/' });
+            }
+            const imports = pageFiles.map(p => `import ${p.compName}Page from './pages/${p.compName}.jsx'`).join('\n');
+            const routes = pageFiles.map(p => `        <Route path="${p.route}" element={<${p.compName}Page />} />`).join('\n');
             return [
               "import { BrowserRouter, Routes, Route } from 'react-router-dom'",
               imports,
@@ -382,6 +384,16 @@ export default {
           'index.css': (frontendCode?.index_css || "@tailwind base;\n@tailwind components;\n@tailwind utilities;").replace(/\\n/g, '\n').replace(/\\t/g, '  '),
           'pages/Dashboard.jsx': (frontendCode?.dashboard_page || `export default function DashboardPage() {\n  return <div className="p-8"><h1 className="text-2xl font-bold">${project.name}</h1></div>\n}`).replace(/\\n/g, '\n').replace(/\\t/g, '  '),
           'components/Layout.jsx': (frontendCode?.layout_component || "import { Outlet } from 'react-router-dom'\nexport default function Layout() { return <div><main><Outlet /></main></div> }").replace(/\\n/g, '\n').replace(/\\t/g, '  '),
+          // Stub files for all other pages so App.jsx imports resolve
+          ...Object.fromEntries(
+            pages.slice(0, 8)
+              .map(p => p.name.replace(/[^a-zA-Z0-9]/g, ''))
+              .filter(n => n && n !== 'Dashboard')
+              .map(n => [
+                `pages/${n}.jsx`,
+                `export default function ${n}Page() {\n  return <div className="p-8"><h1 className="text-2xl font-bold">${n.replace(/([A-Z])/g, ' $1').trim()}</h1><p className="text-muted-foreground mt-2">This page is ready to be implemented.</p></div>\n}`,
+              ])
+          ),
         },
         '🗄️ database': {
           'schema.sql': (dbCode?.schema_sql || '-- Schema').replace(/\\n/g, '\n'),
