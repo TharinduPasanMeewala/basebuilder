@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Sparkles, TrendingUp, FolderOpen, CheckCircle, Clock, ArrowRight, Zap } from 'lucide-react';
+import { Plus, Sparkles, TrendingUp, FolderOpen, CheckCircle, Clock, ArrowRight, Zap, Github } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import ProjectCard from '@/components/project/ProjectCard';
+import ImportFromGitHub from '@/components/project/ImportFromGitHub';
 
 const STATS_CONFIG = [
   { label: 'Total Projects', icon: FolderOpen, color: 'text-primary', bg: 'bg-primary/10', key: 'total' },
@@ -26,6 +27,7 @@ export default function Dashboard() {
   const [projects, setProjects] = useState([]);
   const [blueprints, setBlueprints] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showGitHubImport, setShowGitHubImport] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -57,10 +59,16 @@ export default function Dashboard() {
           <h1 className="text-2xl font-bold text-foreground tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground text-sm mt-1">Design software through AI-powered conversations</p>
         </div>
-        <Button onClick={() => navigate('/projects/new')} className="gap-2 shadow-sm">
-          <Plus className="w-4 h-4" />
-          New Project
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setShowGitHubImport(true)} className="gap-2 shadow-sm">
+            <Github className="w-4 h-4" />
+            Import from GitHub
+          </Button>
+          <Button onClick={() => navigate('/projects/new')} className="gap-2 shadow-sm">
+            <Plus className="w-4 h-4" />
+            New Project
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -149,6 +157,7 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+      <ImportFromGitHub open={showGitHubImport} onClose={() => setShowGitHubImport(false)} />
     </div>
   );
 }
