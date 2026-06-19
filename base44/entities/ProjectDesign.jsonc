@@ -1,0 +1,58 @@
+{
+  "name": "ProjectDesign",
+  "type": "object",
+  "properties": {
+    "project_id": {
+      "type": "string",
+      "title": "Project ID"
+    },
+    "primary_color": {
+      "type": "string",
+      "default": "#6366f1",
+      "title": "Primary Color"
+    },
+    "accent_color": {
+      "type": "string",
+      "default": "#10b981",
+      "title": "Accent Color"
+    },
+    "background_color": {
+      "type": "string",
+      "default": "#f8fafc",
+      "title": "Background Color"
+    },
+    "surface_color": {
+      "type": "string",
+      "default": "#ffffff",
+      "title": "Surface Color"
+    },
+    "text_color": {
+      "type": "string",
+      "default": "#0f172a",
+      "title": "Text Color"
+    },
+    "font_family": {
+      "type": "string",
+      "default": "Inter",
+      "title": "Font Family"
+    },
+    "radius": {
+      "type": "number",
+      "default": 16,
+      "title": "Corner Radius"
+    },
+    "density": {
+      "type": "string",
+      "enum": [
+        "comfortable",
+        "compact",
+        "spacious"
+      ],
+      "default": "comfortable",
+      "title": "Density"
+    }
+  },
+  "required": [
+    "project_id"
+  ]
+}

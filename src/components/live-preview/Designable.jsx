@@ -1,16 +1,17 @@
 import React from 'react';
 
-export default function Designable({ id, label, enabled, selectedId, onSelect, settings = {}, className = '', children }) {
+export default function Designable({ id, label, enabled, selectedId, onSelect, settings = {}, className = '', style: baseStyle, children }) {
   const selected = selectedId === id;
   const style = enabled ? {
+    ...baseStyle,
     transform: `translate(${settings.x || 0}px, ${settings.y || 0}px)`,
     width: settings.width ? `${settings.width}px` : undefined,
     minHeight: settings.height ? `${settings.height}px` : undefined,
-    borderRadius: settings.radius ? `${settings.radius}px` : undefined,
-    background: settings.background || undefined,
-    color: settings.color || undefined,
-    boxShadow: settings.shadow || undefined,
-  } : undefined;
+    borderRadius: settings.radius ? `${settings.radius}px` : baseStyle?.borderRadius,
+    background: settings.background || baseStyle?.background,
+    color: settings.color || baseStyle?.color,
+    boxShadow: settings.shadow || baseStyle?.boxShadow,
+  } : baseStyle;
 
   return (
     <div

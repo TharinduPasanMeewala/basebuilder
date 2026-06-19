@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, RefreshCw, Trash2, Pencil, Database, RotateCcw, MousePointerClick, Sparkles } from 'lucide-react';
 import AppPreviewCanvas from '@/components/live-preview/AppPreviewCanvas';
+import BrandStylePanel from '@/components/live-preview/BrandStylePanel';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,6 +15,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 
 const FIELD_TYPES = ['string', 'text', 'number', 'integer', 'boolean', 'date', 'datetime', 'enum', 'reference'];
+const DEFAULT_BRAND_STYLE = {
+  primary_color: '#6366f1',
+  accent_color: '#10b981',
+  background_color: '#f8fafc',
+  surface_color: '#ffffff',
+  text_color: '#0f172a',
+  font_family: 'Inter',
+  radius: 16,
+  density: 'comfortable',
+};
 
 function normalizeSchema(entity) {
   const schema = entity.schema || {};
@@ -63,6 +74,8 @@ export default function LivePreviewSection({ project }) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [previewMode, setPreviewMode] = useState('app');
   const [designMode, setDesignMode] = useState(false);
+  const [showBrandPanel, setShowBrandPanel] = useState(false);
+  const [brandStyle, setBrandStyle] = useState(DEFAULT_BRAND_STYLE);
   const [visualEdit, setVisualEdit] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [editDraft, setEditDraft] = useState({ label: '', description: '' });
@@ -88,6 +101,15 @@ export default function LivePreviewSection({ project }) {
   const pagesQuery = useQuery({
     queryKey: ['pageSpecsForPreview', project?.id],
     queryFn: () => base44.entities.PageSpec.filter({ project_id: project.id }, 'order_index', 100),
+    enabled: !!project?.id,
+  });
+
+  const designQuery = useQuery({
+    queryKey: ['projectDesign', project?.id],
+    queryFn: async () => {
+      const designs = await base44.entities.ProjectDesign.filter({ project_id: project.id }, '-updated_date', 1);
+      return designs[0] || null;
+    },
     enabled: !!project?.id,
   });
 
@@ -119,7 +141,12 @@ export default function LivePreviewSection({ project }) {
   }, [entityDefinitions, dataEntities]);
   const records = recordsQuery.data || [];
   const pages = pagesQuery.data || [];
-  const isLoading = entitiesQuery.isLoading || dataEntitiesQuery.isLoading || recordsQuery.isLoading || pagesQuery.isLoading;
+  const savedDesign = designQuery.data;
+  const isLoading = entitiesQuery.isLoading || dataEntitiesQuery.isLoading || recordsQuery.isLoading || pagesQuery.isLoading || designQuery.isLoading;
+
+  useEffect(() => {
+    setBrandStyle({ ...DEFAULT_BRAND_STYLE, ...(savedDesign || {}) });
+  }, [savedDesign]);
 
   const recordsByEntity = useMemo(() => {
     return records.reduce((acc, record) => {
@@ -135,6 +162,7 @@ export default function LivePreviewSection({ project }) {
     queryClient.invalidateQueries({ queryKey: ['dataEntitiesForPreview', project.id] });
   };
   const invalidatePages = () => queryClient.invalidateQueries({ queryKey: ['pageSpecsForPreview', project.id] });
+  const invalidateDesign = () => queryClient.invalidateQueries({ queryKey: ['projectDesign', project.id] });
 
   const createRecord = useMutation({
     mutationFn: (record) => base44.entities.ProjectRecord.create(record),
@@ -154,6 +182,15 @@ export default function LivePreviewSection({ project }) {
   const resetPreviewData = useMutation({
     mutationFn: async () => Promise.all(records.map(record => base44.entities.ProjectRecord.delete(record.id))),
     onSuccess: invalidateRecords,
+  });
+
+  const saveBrandStyle = useMutation({
+    mutationFn: async () => {
+      const payload = { ...brandStyle, project_id: project.id };
+      if (savedDesign?.id) return base44.entities.ProjectDesign.update(savedDesign.id, payload);
+      return base44.entities.ProjectDesign.create(payload);
+    },
+    onSuccess: invalidateDesign,
   });
 
   const generateUiPreview = useMutation({
@@ -276,7 +313,7 @@ export default function LivePreviewSection({ project }) {
     else createRecord.mutate(payload);
   };
 
-  const refreshAll = () => { invalidateEntities(); invalidateRecords(); invalidatePages(); };
+  const refreshAll = () => { invalidateEntities(); invalidateRecords(); invalidatePages(); invalidateDesign(); };
 
   const renderField = (fieldName, fieldSchema, required) => {
     const type = getFieldType(fieldSchema);
@@ -335,19 +372,20 @@ export default function LivePreviewSection({ project }) {
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden h-full">
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-card/50 flex-shrink-0">
-        <Database className="w-4 h-4 text-primary" />
-        <h2 className="text-sm font-semibold text-foreground">Live Preview</h2>
+      <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-border bg-card/50 flex-shrink-0">
+        <Database className="w-4 h-4 text-primary flex-shrink-0" />
+        <h2 className="text-sm font-semibold text-foreground whitespace-nowrap">Live Preview</h2>
         <Badge variant="secondary" className="text-[10px]">{entities.length} entities</Badge>
         <Badge variant="outline" className="text-[10px]">{pages.length} pages</Badge>
         <Badge variant="outline" className="text-[10px]">{records.length} records</Badge>
-        <Badge variant="outline" className="text-[10px]">CSS applied</Badge>
-        <div className="flex-1" />
+        <Badge variant="outline" className="text-[10px] whitespace-nowrap">Brand CSS</Badge>
+        <div className="flex-1 min-w-4" />
         <div className="flex rounded-md border border-border overflow-hidden">
-          <button onClick={() => setPreviewMode('app')} className={`h-7 px-3 text-xs ${previewMode === 'app' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:text-foreground'}`}>App Preview</button>
-          <button onClick={() => setPreviewMode('data')} className={`h-7 px-3 text-xs border-l border-border ${previewMode === 'data' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:text-foreground'}`}>Data Records</button>
+          <button onClick={() => setPreviewMode('app')} className={`h-7 px-3 text-xs whitespace-nowrap ${previewMode === 'app' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:text-foreground'}`}>App Preview</button>
+          <button onClick={() => setPreviewMode('data')} className={`h-7 px-3 text-xs whitespace-nowrap border-l border-border ${previewMode === 'data' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:text-foreground'}`}>Data Records</button>
         </div>
         <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" onClick={() => generateUiPreview.mutate()} disabled={generateUiPreview.isPending}><Sparkles className="w-3.5 h-3.5" /> {generateUiPreview.isPending ? 'Generating...' : 'Generate UI Preview'}</Button>
+        {previewMode === 'app' && <Button size="sm" variant={showBrandPanel ? 'default' : 'outline'} className="h-7 text-xs gap-1.5" onClick={() => setShowBrandPanel(v => !v)}>Brand Style</Button>}
         {previewMode === 'app' && <Button size="sm" variant={designMode ? 'default' : 'outline'} className="h-7 text-xs gap-1.5" onClick={() => setDesignMode(v => !v)}><MousePointerClick className="w-3.5 h-3.5" /> {designMode ? 'Design On' : 'Design Mode'}</Button>}
         {previewMode === 'data' && <Button size="sm" variant={visualEdit ? 'default' : 'outline'} className="h-7 text-xs gap-1.5" onClick={() => setVisualEdit(v => !v)}><MousePointerClick className="w-3.5 h-3.5" /> {visualEdit ? 'Editing On' : 'Visual Edit'}</Button>}
         <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" onClick={refreshAll}><RefreshCw className="w-3.5 h-3.5" /> Refresh</Button>
@@ -355,7 +393,8 @@ export default function LivePreviewSection({ project }) {
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {previewMode === 'app' ? <AppPreviewCanvas pages={pages} entities={entities} designMode={designMode} /> : entities.length === 0 ? (
+        {previewMode === 'app' && showBrandPanel && <BrandStylePanel design={brandStyle} onChange={setBrandStyle} onSave={() => saveBrandStyle.mutate()} saving={saveBrandStyle.isPending} />}
+        {previewMode === 'app' ? <AppPreviewCanvas pages={pages} entities={entities} designMode={designMode} designSystem={brandStyle} /> : entities.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-dashed border-border rounded-xl bg-card/40">
             <Database className="w-10 h-10 text-muted-foreground/40 mb-3" />
             <h3 className="font-semibold text-foreground text-sm mb-1">No entities yet</h3>
