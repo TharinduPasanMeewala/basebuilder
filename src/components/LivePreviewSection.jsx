@@ -7,6 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 
@@ -21,8 +23,10 @@ function normalizeSchema(entity) {
 }
 
 function getFieldType(field = {}) {
-  if (field.enum) return 'enum';
+  if (Array.isArray(field.enum) && field.enum.length > 0) return 'enum';
   if (field.type === 'integer') return 'number';
+  if (field.format === 'date') return 'date';
+  if (field.format === 'date-time' || field.type === 'date-time') return 'datetime';
   if (field.type === 'reference' || field.reference || field.related_entity || field.foreign_key || field.$ref) return 'reference';
   if (FIELD_TYPES.includes(field.type)) return field.type;
   return 'string';
@@ -228,20 +232,55 @@ export default function LivePreviewSection({ project }) {
 
   const renderField = (fieldName, fieldSchema, required) => {
     const type = getFieldType(fieldSchema);
-    const common = { id: fieldName, value: formData[fieldName] ?? '', required };
+    const value = formData[fieldName];
 
     if (type === 'enum') {
-      return <select {...common} onChange={e => handleInputChange(fieldName, e.target.value, type)} className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"><option value="">Select...</option>{(fieldSchema.enum || []).map(v => <option key={v} value={v}>{v}</option>)}</select>;
+      return (
+        <Select value={value || ''} onValueChange={val => handleInputChange(fieldName, val, type)} required={required}>
+          <SelectTrigger id={fieldName}>
+            <SelectValue placeholder={`Select ${fieldName.replace(/_/g, ' ')}`} />
+          </SelectTrigger>
+          <SelectContent>
+            {(fieldSchema.enum || []).map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      );
     }
+
     if (type === 'boolean') {
-      return <select {...common} value={String(formData[fieldName] ?? '')} onChange={e => handleInputChange(fieldName, e.target.value === 'true', type)} className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"><option value="">Select...</option><option value="true">Yes</option><option value="false">No</option></select>;
+      return (
+        <div className="flex items-center gap-2 rounded-md border border-input bg-background px-3 py-2">
+          <Switch id={fieldName} checked={!!value} onCheckedChange={checked => handleInputChange(fieldName, checked, type)} />
+          <span className="text-sm text-muted-foreground">{value ? 'Yes' : 'No'}</span>
+        </div>
+      );
     }
+
     if (type === 'reference') {
       const related = getReferenceName(fieldSchema);
       const options = recordsByEntity[related] || [];
-      return <select {...common} onChange={e => handleInputChange(fieldName, e.target.value, type)} className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"><option value="">Select {related || 'record'}...</option>{options.map(r => <option key={r.id} value={r.id}>{recordLabel(r)}</option>)}</select>;
+      return (
+        <Select value={value || ''} onValueChange={val => handleInputChange(fieldName, val, type)} required={required}>
+          <SelectTrigger id={fieldName}>
+            <SelectValue placeholder={`Select ${related || 'record'}`} />
+          </SelectTrigger>
+          <SelectContent>
+            {options.map(record => <SelectItem key={record.id} value={record.id}>{recordLabel(record)}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      );
     }
-    return <Input {...common} type={type === 'number' ? 'number' : type === 'date' ? 'date' : type === 'datetime' ? 'datetime-local' : 'text'} onChange={e => handleInputChange(fieldName, e.target.value, type)} placeholder={fieldSchema.description || fieldName} />;
+
+    return (
+      <Input
+        id={fieldName}
+        value={value ?? ''}
+        required={required}
+        type={type === 'number' ? 'number' : type === 'date' ? 'date' : type === 'datetime' ? 'datetime-local' : 'text'}
+        onChange={e => handleInputChange(fieldName, e.target.value, type)}
+        placeholder={fieldSchema.description || fieldName}
+      />
+    );
   };
 
   if (isLoading) return <div className="flex items-center justify-center flex-1"><div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" /></div>;
@@ -297,7 +336,7 @@ export default function LivePreviewSection({ project }) {
         <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editingRecord ? 'Edit' : 'Add'} {selectedEntity?.display_name || selectedEntity?.name} Record</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
-            {selectedEntity && Object.entries(normalizeSchema(selectedEntity).properties).map(([fieldName, fieldSchema]) => <div key={fieldName} className="space-y-1.5"><Label htmlFor={fieldName} className="text-xs">{fieldName}{normalizeSchema(selectedEntity).required.includes(fieldName) && <span className="text-destructive ml-1">*</span>}</Label>{renderField(fieldName, fieldSchema, normalizeSchema(selectedEntity).required.includes(fieldName))}</div>)}
+            {selectedEntity && Object.entries(normalizeSchema(selectedEntity).properties).map(([fieldName, fieldSchema]) => <div key={fieldName} className="space-y-1.5"><Label htmlFor={fieldName} className="text-xs capitalize">{fieldName.replace(/_/g, ' ')}{normalizeSchema(selectedEntity).required.includes(fieldName) && <span className="text-destructive ml-1">*</span>}</Label>{renderField(fieldName, fieldSchema, normalizeSchema(selectedEntity).required.includes(fieldName))}</div>)}
           </div>
           <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button><Button onClick={handleSaveRecord} disabled={createRecord.isPending || updateRecord.isPending}>{createRecord.isPending || updateRecord.isPending ? 'Saving...' : 'Save Record'}</Button></div>
         </DialogContent>
