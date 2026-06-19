@@ -30,6 +30,8 @@ const AGENT_NAMES = {
 
 const VALID_CATEGORIES = ['functional', 'non_functional', 'business_rule', 'user_story', 'constraint', 'assumption'];
 const VALID_PRIORITIES = ['critical', 'high', 'medium', 'low'];
+const VALID_PAGE_TYPES = ['dashboard', 'list', 'detail', 'form', 'report', 'settings', 'auth', 'landing', 'kanban', 'calendar', 'chart'];
+const VALID_FIELD_TYPES = ['string', 'text', 'number', 'integer', 'boolean', 'date', 'datetime', 'json', 'array', 'email', 'url', 'enum'];
 
 // Build a rich cross-agent context so every agent knows what others have said/decided
 async function buildCrossAgentContext(project) {
@@ -208,6 +210,124 @@ Return only CONCRETE, ACTIONABLE requirements. Empty array if none.`,
   }
 }
 
+async function extractVisualSpecsInBackground(project, userMsg, assistantMsg, fileUrls) {
+  if (!fileUrls?.length) return { entities: 0, pages: 0 };
+  try {
+    const result = await base44.integrations.Core.InvokeLLM({
+      prompt: `Visual product analysis engine. Analyze the attached screenshot, wireframe, sketch, or UI reference and convert it into Sara Builder AI project specs.
+PROJECT: "${project.name}" (${project.type?.replace(/_/g, ' ')})
+USER REQUEST: ${userMsg}
+AGENT RESPONSE: ${assistantMsg}
+
+Extract only what is visible or strongly implied by the image:
+1. Data entities needed to power the UI, with fields and relationships.
+2. UI pages/screens represented by the image.
+
+Return practical specs that can be saved directly. Avoid duplicates and generic filler.`,
+      file_urls: fileUrls,
+      response_json_schema: {
+        type: 'object',
+        properties: {
+          entities: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                description: { type: 'string' },
+                module: { type: 'string' },
+                fields: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      name: { type: 'string' },
+                      type: { type: 'string' },
+                      required: { type: 'boolean' },
+                      description: { type: 'string' },
+                      enum_values: { type: 'array', items: { type: 'string' } },
+                      foreign_key: { type: 'string' },
+                    },
+                  },
+                },
+                relationships: { type: 'array', items: { type: 'object' } },
+              },
+            },
+          },
+          pages: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                route: { type: 'string' },
+                type: { type: 'string' },
+                description: { type: 'string' },
+                module: { type: 'string' },
+                components: { type: 'array', items: { type: 'object' } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const [existingEntities, existingPages] = await Promise.all([
+      base44.entities.DataEntity.filter({ project_id: project.id }),
+      base44.entities.PageSpec.filter({ project_id: project.id }),
+    ]);
+    const entityNames = new Set(existingEntities.map(e => e.name?.toLowerCase().trim()));
+    const pageNames = new Set(existingPages.map(p => p.name?.toLowerCase().trim()));
+    const newEntities = (result?.entities || []).filter(e => e.name && !entityNames.has(e.name.toLowerCase().trim())).slice(0, 12);
+    const newPages = (result?.pages || []).filter(p => p.name && !pageNames.has(p.name.toLowerCase().trim())).slice(0, 12);
+
+    for (let i = 0; i < newEntities.length; i++) {
+      const entity = newEntities[i];
+      await base44.entities.DataEntity.create({
+        project_id: project.id,
+        name: entity.name,
+        description: entity.description || '',
+        module: entity.module || 'Visual Import',
+        fields: (entity.fields || []).map(field => ({
+          name: field.name,
+          type: VALID_FIELD_TYPES.includes(field.type) ? field.type : 'string',
+          required: !!field.required,
+          description: field.description || '',
+          enum_values: field.enum_values || [],
+          foreign_key: field.foreign_key || '',
+        })).filter(field => field.name),
+        relationships: Array.isArray(entity.relationships) ? entity.relationships : [],
+        source: 'ai_generated',
+        order_index: existingEntities.length + i,
+      });
+    }
+
+    for (let i = 0; i < newPages.length; i++) {
+      const page = newPages[i];
+      await base44.entities.PageSpec.create({
+        project_id: project.id,
+        name: page.name,
+        route: page.route || `/${page.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+        type: VALID_PAGE_TYPES.includes(page.type) ? page.type : 'list',
+        description: page.description || '',
+        module: page.module || 'Visual Import',
+        components: Array.isArray(page.components) ? page.components : [],
+        source: 'ai_generated',
+        order_index: existingPages.length + i,
+      });
+    }
+
+    if (newEntities.length > 0 || newPages.length > 0) {
+      await base44.entities.Project.update(project.id, { phase: 'design', completeness_score: Math.max(project.completeness_score || 0, 50) });
+    }
+
+    return { entities: newEntities.length, pages: newPages.length };
+  } catch (e) {
+    console.warn('Background visual spec extraction failed:', e);
+    return { entities: 0, pages: 0 };
+  }
+}
+
 export default function ChatSection({ project, onRefresh }) {
   const [conversation, setConversation] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -333,7 +453,7 @@ export default function ChatSection({ project, onRefresh }) {
 CURRENT CONVERSATION:
 ${history}
 
-Respond as ${AGENT_NAMES[activeAgent]}. Be professional, specific, and reference the shared project knowledge when relevant. Use markdown for structured content.${fileUrls.length > 0 ? '\n\nThe user has shared visual/URL content — analyze it and extract design patterns, features, or requirements relevant to this project.' : ''}`;
+Respond as ${AGENT_NAMES[activeAgent]}. Be professional, specific, and reference the shared project knowledge when relevant. Use markdown for structured content.${fileUrls.length > 0 ? '\n\nThe user has shared visual/URL content — analyze it carefully. If it is a screenshot, wireframe, or sketch, identify the UI screens, forms, tables, data fields, entities, relationships, and user workflows it implies.' : ''}`;
 
     const response = await base44.integrations.Core.InvokeLLM({
       prompt,
@@ -357,16 +477,20 @@ Respond as ${AGENT_NAMES[activeAgent]}. Be professional, specific, and reference
     setMessages(finalMessages);
     setSending(false);
 
-    // Background requirement extraction
+    // Background extraction: requirements plus UI/data specs from uploaded visuals
     setExtracting(true);
-    extractRequirementsInBackground(projectRef.current, userMsg.content, response)
-      .then(count => {
-        if (count > 0) {
+    Promise.all([
+      extractRequirementsInBackground(projectRef.current, userMsg.content, response),
+      extractVisualSpecsInBackground(projectRef.current, userMsg.content, response, fileUrls),
+    ])
+      .then(([reqCount, visual]) => {
+        if (reqCount > 0 || visual.entities > 0 || visual.pages > 0) {
           toast({
-            title: `${count} requirement${count > 1 ? 's' : ''} captured`,
-            description: 'Auto-extracted from conversation.',
-            duration: 3000,
+            title: 'AI specs captured',
+            description: `${reqCount} requirement${reqCount === 1 ? '' : 's'}, ${visual.entities} data model${visual.entities === 1 ? '' : 's'}, ${visual.pages} UI page${visual.pages === 1 ? '' : 's'} created.`,
+            duration: 4000,
           });
+          onRefresh?.();
         }
       })
       .finally(() => setExtracting(false));
