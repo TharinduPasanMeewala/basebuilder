@@ -20,7 +20,7 @@ import AgentRoundtable from '@/components/project/AgentRoundtable';
 import AppDevelopmentSection from '@/components/project/AppDevelopmentSection';
 import DeploySection from '@/components/project/DeploySection';
 import PublishSection from '@/components/project/PublishSection';
-import PreviewSection from '@/components/project/PreviewSection';
+import LivePreviewSection from '@/components/LivePreviewSection';
 import VersionsSection from '@/components/project/VersionsSection';
 import StudioSection from '@/components/project/StudioSection';
 
@@ -33,7 +33,7 @@ const SECTIONS = [
   { key: 'workflows', label: 'Workflows', icon: GitBranch },
   { key: 'apis', label: 'APIs', icon: Code },
   { key: 'studio', label: 'Studio', icon: MonitorPlay },
-  { key: 'preview', label: 'Preview', icon: Eye },
+  { key: 'live-preview', label: 'Live Preview', icon: Eye },
   { key: 'blueprint', label: 'Blueprint', icon: Sparkles },
   { key: 'development', label: 'Development', icon: Rocket },
   { key: 'deploy', label: 'Deploy', icon: Globe },
@@ -242,7 +242,7 @@ function SectionContent({ section, project, onRefresh }) {
     case 'apis': return <ApisSection project={project} onRefresh={onRefresh} />;
     case 'roundtable': return <AgentRoundtable project={project} />;
     case 'studio': return <StudioSection project={project} onRefresh={onRefresh} />;
-    case 'preview': return <PreviewSection project={project} onRefresh={onRefresh} />;
+    case 'live-preview': return <LivePreviewSection project={project} />;
     case 'blueprint': return <BlueprintSection project={project} onRefresh={onRefresh} />;
     case 'development': return <AppDevelopmentSection project={project} onRefresh={onRefresh} />;
     case 'deploy': return <DeploySection project={project} onRefresh={onRefresh} />;

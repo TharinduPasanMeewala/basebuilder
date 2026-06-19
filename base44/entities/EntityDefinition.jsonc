@@ -1,0 +1,39 @@
+{
+  "name": "EntityDefinition",
+  "type": "object",
+  "properties": {
+    "project_id": {
+      "type": "string",
+      "title": "Project ID"
+    },
+    "name": {
+      "type": "string",
+      "title": "Entity Name"
+    },
+    "display_name": {
+      "type": "string",
+      "title": "Display Name"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description"
+    },
+    "schema": {
+      "type": "object",
+      "title": "JSON Schema"
+    },
+    "module": {
+      "type": "string",
+      "title": "Module"
+    },
+    "order_index": {
+      "type": "number",
+      "default": 0,
+      "title": "Order"
+    }
+  },
+  "required": [
+    "project_id",
+    "name"
+  ]
+}

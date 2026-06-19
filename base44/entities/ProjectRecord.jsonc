@@ -1,0 +1,27 @@
+{
+  "name": "ProjectRecord",
+  "type": "object",
+  "properties": {
+    "project_id": {
+      "type": "string",
+      "title": "Project ID"
+    },
+    "entity_definition_id": {
+      "type": "string",
+      "title": "Entity Definition ID"
+    },
+    "entity_name": {
+      "type": "string",
+      "title": "Entity Name"
+    },
+    "record_data": {
+      "type": "object",
+      "title": "Record Data"
+    }
+  },
+  "required": [
+    "project_id",
+    "entity_name",
+    "record_data"
+  ]
+}
