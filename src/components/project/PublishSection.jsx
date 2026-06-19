@@ -7,6 +7,7 @@ import {
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { generateCodeFiles } from '@/lib/codegen';
+import FinalAppPreview from '@/components/project/final-preview/FinalAppPreview';
 
 const PUBLISH_STEPS = [
   { id: 'validate',    label: 'Validating blueprint',         icon: Shield,   group: 'prep' },
@@ -41,6 +42,7 @@ export default function PublishSection({ project, onRefresh }) {
   const [generatedCode, setGeneratedCode] = useState(null);
   const [expandedCode, setExpandedCode] = useState({});
   const [copied, setCopied] = useState(null);
+  const [activeOutputTab, setActiveOutputTab] = useState('preview');
   const [loading, setLoading] = useState(true);
   const logsEndRef = useRef(null);
 
@@ -71,6 +73,7 @@ export default function PublishSection({ project, onRefresh }) {
     setLogs([]);
     setStepStatus({});
     setGeneratedCode(null);
+    setActiveOutputTab('preview');
 
     try {
       // Load all project data
@@ -513,8 +516,17 @@ Return ONLY a JSON object (no markdown fences):
           </div>
         ) : null}
 
-        {/* Generated Code Explorer */}
         {codeToShow && (
+          <div className="flex rounded-md border border-border overflow-hidden w-fit bg-card">
+            <button onClick={() => setActiveOutputTab('preview')} className={`h-8 px-4 text-xs font-medium ${activeOutputTab === 'preview' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>Final App Preview</button>
+            <button onClick={() => setActiveOutputTab('code')} className={`h-8 px-4 text-xs font-medium border-l border-border ${activeOutputTab === 'code' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>Generated Code</button>
+          </div>
+        )}
+
+        {codeToShow && activeOutputTab === 'preview' && <FinalAppPreview project={project} publishState={{ ...(publishState || {}), code: codeToShow }} />}
+
+        {/* Generated Code Explorer */}
+        {codeToShow && activeOutputTab === 'code' && (
           <div className="bg-card border border-border rounded-xl overflow-hidden">
             <div className="px-4 py-3 border-b border-border bg-muted/20 flex items-center gap-2">
               <Terminal className="w-4 h-4 text-primary" />
