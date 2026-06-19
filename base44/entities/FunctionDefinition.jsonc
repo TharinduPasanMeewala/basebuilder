@@ -1,0 +1,62 @@
+{
+  "name": "FunctionDefinition",
+  "type": "object",
+  "properties": {
+    "workspace_id": {
+      "type": "string",
+      "title": "Workspace ID"
+    },
+    "project_id": {
+      "type": "string",
+      "title": "Project ID"
+    },
+    "name": {
+      "type": "string",
+      "title": "Function Name"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description"
+    },
+    "code": {
+      "type": "string",
+      "title": "Deno Function Code"
+    },
+    "trigger_type": {
+      "type": "string",
+      "enum": [
+        "manual",
+        "entity_create",
+        "entity_update",
+        "entity_delete",
+        "scheduled"
+      ],
+      "default": "manual",
+      "title": "Trigger Type"
+    },
+    "trigger_config": {
+      "type": "object",
+      "title": "Trigger Config"
+    },
+    "last_test_result": {
+      "type": "object",
+      "title": "Last Test Result"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "ready",
+        "disabled"
+      ],
+      "default": "draft",
+      "title": "Status"
+    }
+  },
+  "required": [
+    "workspace_id",
+    "project_id",
+    "name",
+    "code"
+  ]
+}

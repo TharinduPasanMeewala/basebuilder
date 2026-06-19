@@ -1,0 +1,75 @@
+{
+  "name": "EntityDefinition",
+  "type": "object",
+  "properties": {
+    "workspace_id": {
+      "type": "string",
+      "title": "Workspace ID"
+    },
+    "project_id": {
+      "type": "string",
+      "title": "Project ID"
+    },
+    "name": {
+      "type": "string",
+      "title": "Entity Name"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description"
+    },
+    "schema": {
+      "type": "object",
+      "title": "JSON Schema"
+    },
+    "fields": {
+      "type": "array",
+      "title": "Fields",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "description": {
+            "type": "string"
+          },
+          "default_value": {
+            "type": "string"
+          },
+          "enum_values": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reference_entity_id": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "prompt",
+        "visual",
+        "imported"
+      ],
+      "default": "visual",
+      "title": "Source"
+    }
+  },
+  "required": [
+    "workspace_id",
+    "project_id",
+    "name",
+    "schema"
+  ]
+}

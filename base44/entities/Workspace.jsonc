@@ -1,0 +1,56 @@
+{
+  "name": "Workspace",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "Workspace Name"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description"
+    },
+    "plan": {
+      "type": "string",
+      "enum": [
+        "free",
+        "starter",
+        "pro",
+        "enterprise"
+      ],
+      "default": "free",
+      "title": "Plan"
+    },
+    "local_ai_enabled": {
+      "type": "boolean",
+      "default": false,
+      "title": "Local AI Enabled"
+    },
+    "local_ai_provider": {
+      "type": "string",
+      "enum": [
+        "none",
+        "ollama",
+        "webllm",
+        "custom"
+      ],
+      "default": "none",
+      "title": "Local AI Provider"
+    },
+    "local_ai_endpoint": {
+      "type": "string",
+      "title": "Local AI Endpoint"
+    },
+    "settings": {
+      "type": "object",
+      "title": "Workspace Settings"
+    },
+    "created_by": {
+      "type": "string",
+      "title": "Created By"
+    }
+  },
+  "required": [
+    "name"
+  ]
+}

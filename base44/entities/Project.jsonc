@@ -2,9 +2,9 @@
   "name": "Project",
   "type": "object",
   "properties": {
-    "org_id": {
+    "workspace_id": {
       "type": "string",
-      "title": "Organization ID"
+      "title": "Workspace ID"
     },
     "name": {
       "type": "string",
@@ -14,70 +14,33 @@
       "type": "string",
       "title": "Description"
     },
-    "type": {
-      "type": "string",
-      "enum": [
-        "saas_product",
-        "erp_system",
-        "crm_system",
-        "hr_system",
-        "inventory_system",
-        "warehouse_system",
-        "accounting_system",
-        "ecommerce_platform",
-        "internal_tool",
-        "custom_application",
-        "project_management",
-        "service_management",
-        "customer_portal"
-      ],
-      "title": "Project Type"
-    },
-    "phase": {
-      "type": "string",
-      "enum": [
-        "discovery",
-        "analysis",
-        "design",
-        "architecture",
-        "review",
-        "generation",
-        "completed"
-      ],
-      "default": "discovery",
-      "title": "Current Phase"
-    },
     "status": {
       "type": "string",
       "enum": [
+        "draft",
         "active",
-        "paused",
-        "completed",
         "archived"
       ],
-      "default": "active",
+      "default": "draft",
       "title": "Status"
     },
-    "industry": {
+    "app_type": {
       "type": "string",
-      "title": "Target Industry"
+      "title": "App Type"
     },
-    "version_count": {
-      "type": "number",
-      "default": 1,
-      "title": "Version Count"
+    "theme": {
+      "type": "object",
+      "title": "Theme"
     },
-    "completeness_score": {
-      "type": "number",
-      "default": 0,
-      "title": "Completeness Score (%)"
-    },
-    "tags": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "title": "Tags"
+    "local_ai_mode": {
+      "type": "string",
+      "enum": [
+        "base44",
+        "hybrid",
+        "local_first"
+      ],
+      "default": "hybrid",
+      "title": "AI Mode"
     },
     "created_by": {
       "type": "string",
@@ -85,7 +48,7 @@
     }
   },
   "required": [
-    "name",
-    "type"
+    "workspace_id",
+    "name"
   ]
 }

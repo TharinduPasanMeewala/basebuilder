@@ -1,0 +1,77 @@
+{
+  "name": "AgentDefinition",
+  "type": "object",
+  "properties": {
+    "workspace_id": {
+      "type": "string",
+      "title": "Workspace ID"
+    },
+    "project_id": {
+      "type": "string",
+      "title": "Project ID"
+    },
+    "name": {
+      "type": "string",
+      "title": "Agent Name"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description"
+    },
+    "system_prompt": {
+      "type": "string",
+      "title": "System Prompt"
+    },
+    "tools": {
+      "type": "array",
+      "title": "Tools",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "target_id": {
+            "type": "string"
+          },
+          "operations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "model_provider": {
+      "type": "string",
+      "enum": [
+        "base44",
+        "local",
+        "hybrid"
+      ],
+      "default": "base44",
+      "title": "Model Provider"
+    },
+    "model_name": {
+      "type": "string",
+      "title": "Model Name"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "active",
+        "disabled"
+      ],
+      "default": "draft",
+      "title": "Status"
+    }
+  },
+  "required": [
+    "workspace_id",
+    "project_id",
+    "name",
+    "system_prompt"
+  ]
+}
