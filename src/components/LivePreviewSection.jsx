@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, RefreshCw, Trash2, Pencil, Database, RotateCcw, MousePointerClick } from 'lucide-react';
+import { Plus, RefreshCw, Trash2, Pencil, Database, RotateCcw, MousePointerClick, Sparkles } from 'lucide-react';
+import AppPreviewCanvas from '@/components/live-preview/AppPreviewCanvas';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -60,6 +61,7 @@ export default function LivePreviewSection({ project }) {
   const [editingRecord, setEditingRecord] = useState(null);
   const [formData, setFormData] = useState({});
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [previewMode, setPreviewMode] = useState('app');
   const [visualEdit, setVisualEdit] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [editDraft, setEditDraft] = useState({ label: '', description: '' });
@@ -79,6 +81,12 @@ export default function LivePreviewSection({ project }) {
   const recordsQuery = useQuery({
     queryKey: ['projectRecords', project?.id],
     queryFn: () => base44.entities.ProjectRecord.filter({ project_id: project.id }, '-created_date', 500),
+    enabled: !!project?.id,
+  });
+
+  const pagesQuery = useQuery({
+    queryKey: ['pageSpecsForPreview', project?.id],
+    queryFn: () => base44.entities.PageSpec.filter({ project_id: project.id }, 'order_index', 100),
     enabled: !!project?.id,
   });
 
@@ -109,7 +117,8 @@ export default function LivePreviewSection({ project }) {
     }));
   }, [entityDefinitions, dataEntities]);
   const records = recordsQuery.data || [];
-  const isLoading = entitiesQuery.isLoading || dataEntitiesQuery.isLoading || recordsQuery.isLoading;
+  const pages = pagesQuery.data || [];
+  const isLoading = entitiesQuery.isLoading || dataEntitiesQuery.isLoading || recordsQuery.isLoading || pagesQuery.isLoading;
 
   const recordsByEntity = useMemo(() => {
     return records.reduce((acc, record) => {
@@ -124,6 +133,7 @@ export default function LivePreviewSection({ project }) {
     queryClient.invalidateQueries({ queryKey: ['entityDefinitions', project.id] });
     queryClient.invalidateQueries({ queryKey: ['dataEntitiesForPreview', project.id] });
   };
+  const invalidatePages = () => queryClient.invalidateQueries({ queryKey: ['pageSpecsForPreview', project.id] });
 
   const createRecord = useMutation({
     mutationFn: (record) => base44.entities.ProjectRecord.create(record),
@@ -143,6 +153,43 @@ export default function LivePreviewSection({ project }) {
   const resetPreviewData = useMutation({
     mutationFn: async () => Promise.all(records.map(record => base44.entities.ProjectRecord.delete(record.id))),
     onSuccess: invalidateRecords,
+  });
+
+  const generateUiPreview = useMutation({
+    mutationFn: async () => {
+      const result = await base44.integrations.Core.InvokeLLM({
+        prompt: `Generate UX/UI page designs for this app so they can be shown in a live app preview.\nProject: ${project.name}\nDescription: ${project.description || ''}\nType: ${project.type}\nData models: ${JSON.stringify(entities.map(e => ({ name: e.name, description: e.description, fields: Object.keys(e.schema?.properties || {}) })))}\nExisting pages: ${JSON.stringify(pages.map(p => ({ name: p.name, type: p.type, route: p.route })))}\nCreate practical screens such as dashboard, list, detail, form, report, or settings pages.`,
+        response_json_schema: {
+          type: 'object',
+          properties: {
+            pages: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string' }, route: { type: 'string' }, type: { type: 'string' }, description: { type: 'string' }, module: { type: 'string' }, components: { type: 'array', items: { type: 'object' } }
+                }
+              }
+            }
+          }
+        }
+      });
+      const existing = new Set(pages.map(p => p.name?.toLowerCase().trim()));
+      const validTypes = ['dashboard','list','detail','form','report','settings','landing','kanban','calendar','chart'];
+      const newPages = (result.pages || []).filter(p => p.name && !existing.has(p.name.toLowerCase().trim())).slice(0, 12);
+      await Promise.all(newPages.map((page, index) => base44.entities.PageSpec.create({
+        project_id: project.id,
+        name: page.name,
+        route: page.route || `/${page.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+        type: validTypes.includes(page.type) ? page.type : 'list',
+        description: page.description || '',
+        module: page.module || project.name,
+        components: Array.isArray(page.components) ? page.components : [],
+        source: 'ai_generated',
+        order_index: pages.length + index,
+      })));
+    },
+    onSuccess: () => { invalidatePages(); setPreviewMode('app'); },
   });
 
   const updatePreviewElement = useMutation({
@@ -228,7 +275,7 @@ export default function LivePreviewSection({ project }) {
     else createRecord.mutate(payload);
   };
 
-  const refreshAll = () => { invalidateEntities(); invalidateRecords(); };
+  const refreshAll = () => { invalidateEntities(); invalidateRecords(); invalidatePages(); };
 
   const renderField = (fieldName, fieldSchema, required) => {
     const type = getFieldType(fieldSchema);
@@ -291,15 +338,21 @@ export default function LivePreviewSection({ project }) {
         <Database className="w-4 h-4 text-primary" />
         <h2 className="text-sm font-semibold text-foreground">Live Data Preview</h2>
         <Badge variant="secondary" className="text-[10px]">{entities.length} entities</Badge>
+        <Badge variant="outline" className="text-[10px]">{pages.length} pages</Badge>
         <Badge variant="outline" className="text-[10px]">{records.length} records</Badge>
         <div className="flex-1" />
-        <Button size="sm" variant={visualEdit ? 'default' : 'outline'} className="h-7 text-xs gap-1.5" onClick={() => setVisualEdit(v => !v)}><MousePointerClick className="w-3.5 h-3.5" /> {visualEdit ? 'Editing On' : 'Visual Edit'}</Button>
+        <div className="flex rounded-md border border-border overflow-hidden">
+          <button onClick={() => setPreviewMode('app')} className={`h-7 px-3 text-xs ${previewMode === 'app' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:text-foreground'}`}>App Preview</button>
+          <button onClick={() => setPreviewMode('data')} className={`h-7 px-3 text-xs border-l border-border ${previewMode === 'data' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:text-foreground'}`}>Data Records</button>
+        </div>
+        <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" onClick={() => generateUiPreview.mutate()} disabled={generateUiPreview.isPending}><Sparkles className="w-3.5 h-3.5" /> {generateUiPreview.isPending ? 'Generating...' : 'Generate UI Preview'}</Button>
+        {previewMode === 'data' && <Button size="sm" variant={visualEdit ? 'default' : 'outline'} className="h-7 text-xs gap-1.5" onClick={() => setVisualEdit(v => !v)}><MousePointerClick className="w-3.5 h-3.5" /> {visualEdit ? 'Editing On' : 'Visual Edit'}</Button>}
         <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" onClick={refreshAll}><RefreshCw className="w-3.5 h-3.5" /> Refresh</Button>
         {records.length > 0 && <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 text-destructive" onClick={() => resetPreviewData.mutate()} disabled={resetPreviewData.isPending}><RotateCcw className="w-3.5 h-3.5" /> Reset Preview Data</Button>}
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {entities.length === 0 ? (
+        {previewMode === 'app' ? <AppPreviewCanvas pages={pages} entities={entities} /> : entities.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-dashed border-border rounded-xl bg-card/40">
             <Database className="w-10 h-10 text-muted-foreground/40 mb-3" />
             <h3 className="font-semibold text-foreground text-sm mb-1">No entities yet</h3>
