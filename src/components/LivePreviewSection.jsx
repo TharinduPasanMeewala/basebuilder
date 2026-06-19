@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, RefreshCw, Trash2, Pencil, Database, RotateCcw } from 'lucide-react';
+import { Plus, RefreshCw, Trash2, Pencil, Database, RotateCcw, MousePointerClick } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -56,6 +56,9 @@ export default function LivePreviewSection({ project }) {
   const [editingRecord, setEditingRecord] = useState(null);
   const [formData, setFormData] = useState({});
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [visualEdit, setVisualEdit] = useState(false);
+  const [editTarget, setEditTarget] = useState(null);
+  const [editDraft, setEditDraft] = useState({ label: '', description: '' });
 
   const entitiesQuery = useQuery({
     queryKey: ['entityDefinitions', project?.id],
@@ -84,6 +87,8 @@ export default function LivePreviewSection({ project }) {
       name: entity.name,
       display_name: entity.name,
       description: entity.description,
+      _source: 'DataEntity',
+      _original: entity,
       schema: {
         type: 'object',
         properties: (entity.fields || []).reduce((acc, field) => {
@@ -135,6 +140,58 @@ export default function LivePreviewSection({ project }) {
     mutationFn: async () => Promise.all(records.map(record => base44.entities.ProjectRecord.delete(record.id))),
     onSuccess: invalidateRecords,
   });
+
+  const updatePreviewElement = useMutation({
+    mutationFn: async ({ target, draft }) => {
+      if (target.type === 'entity') {
+        if (target.entity._source === 'DataEntity') {
+          await base44.entities.DataEntity.update(target.entity.id, { name: draft.label, description: draft.description });
+        } else {
+          await base44.entities.EntityDefinition.update(target.entity.id, { display_name: draft.label, description: draft.description });
+        }
+        if (target.entity._source === 'DataEntity' && draft.label !== target.entity.name) {
+          const matching = records.filter(record => record.entity_name === target.entity.name);
+          await Promise.all(matching.map(record => base44.entities.ProjectRecord.update(record.id, { entity_name: draft.label })));
+        }
+      }
+      if (target.type === 'field') {
+        const { entity, fieldName } = target;
+        const { properties, required } = normalizeSchema(entity);
+        const nextProperties = {};
+        Object.entries(properties).forEach(([key, value]) => {
+          nextProperties[key === fieldName ? draft.label : key] = key === fieldName ? { ...value, description: draft.description } : value;
+        });
+        const nextRequired = required.map(key => key === fieldName ? draft.label : key);
+        if (entity._source === 'DataEntity') {
+          const original = entity._original || {};
+          const nextFields = (original.fields || []).map(field => field.name === fieldName ? { ...field, name: draft.label, description: draft.description } : field);
+          await base44.entities.DataEntity.update(entity.id, { fields: nextFields });
+        } else {
+          await base44.entities.EntityDefinition.update(entity.id, { schema: { ...(entity.schema || {}), properties: nextProperties, required: nextRequired } });
+        }
+        if (draft.label !== fieldName) {
+          const matching = records.filter(record => record.entity_name === entity.name);
+          await Promise.all(matching.map(record => {
+            const data = { ...(record.record_data || {}) };
+            data[draft.label] = data[fieldName];
+            delete data[fieldName];
+            return base44.entities.ProjectRecord.update(record.id, { record_data: data });
+          }));
+        }
+      }
+    },
+    onSuccess: () => { invalidateEntities(); invalidateRecords(); setEditTarget(null); },
+  });
+
+  const openVisualEditor = (target) => {
+    if (!visualEdit) return;
+    const isField = target.type === 'field';
+    setEditTarget(target);
+    setEditDraft({
+      label: isField ? target.fieldName : (target.entity.display_name || target.entity.name),
+      description: isField ? (target.fieldSchema?.description || '') : (target.entity.description || ''),
+    });
+  };
 
   const openCreateDialog = (entity) => {
     setSelectedEntity(entity);
@@ -197,6 +254,7 @@ export default function LivePreviewSection({ project }) {
         <Badge variant="secondary" className="text-[10px]">{entities.length} entities</Badge>
         <Badge variant="outline" className="text-[10px]">{records.length} records</Badge>
         <div className="flex-1" />
+        <Button size="sm" variant={visualEdit ? 'default' : 'outline'} className="h-7 text-xs gap-1.5" onClick={() => setVisualEdit(v => !v)}><MousePointerClick className="w-3.5 h-3.5" /> {visualEdit ? 'Editing On' : 'Visual Edit'}</Button>
         <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" onClick={refreshAll}><RefreshCw className="w-3.5 h-3.5" /> Refresh</Button>
         {records.length > 0 && <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 text-destructive" onClick={() => resetPreviewData.mutate()} disabled={resetPreviewData.isPending}><RotateCcw className="w-3.5 h-3.5" /> Reset Preview Data</Button>}
       </div>
@@ -215,15 +273,19 @@ export default function LivePreviewSection({ project }) {
           return (
             <Card key={entity.id} className="overflow-hidden">
               <CardHeader className="flex flex-row items-center justify-between gap-4 bg-muted/30 py-4">
-                <div className="min-w-0">
+                <button
+                  type="button"
+                  onClick={() => openVisualEditor({ type: 'entity', entity })}
+                  className={`min-w-0 text-left rounded-md transition-colors ${visualEdit ? 'ring-1 ring-primary/30 bg-primary/5 px-2 py-1 hover:bg-primary/10 cursor-pointer' : 'cursor-default'}`}
+                >
                   <CardTitle className="text-base truncate">{entity.display_name || entity.name}</CardTitle>
                   <p className="text-xs text-muted-foreground mt-1">{entity.description || `${fieldNames.length} fields · ${entityRecords.length} preview records`}</p>
-                </div>
+                </button>
                 <Button size="sm" className="gap-1.5 flex-shrink-0" onClick={() => openCreateDialog(entity)}><Plus className="w-3.5 h-3.5" /> Add Record</Button>
               </CardHeader>
               <CardContent className="p-0">
                 {entityRecords.length === 0 ? <div className="p-8 text-center text-xs text-muted-foreground">No records yet. Add a record to test this entity.</div> : (
-                  <div className="overflow-x-auto"><Table><TableHeader><TableRow>{fieldNames.map(name => <TableHead key={name}>{name}{required.includes(name) && <span className="text-destructive ml-1">*</span>}</TableHead>)}<TableHead className="w-24 text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{entityRecords.map(record => <TableRow key={record.id}>{fieldNames.map(name => <TableCell key={name} className="text-sm">{displayValue(record.record_data?.[name], properties[name], records)}</TableCell>)}<TableCell className="text-right"><Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditDialog(entity, record)}><Pencil className="w-3.5 h-3.5" /></Button><Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteRecord.mutate(record.id)}><Trash2 className="w-3.5 h-3.5" /></Button></TableCell></TableRow>)}</TableBody></Table></div>
+                  <div className="overflow-x-auto"><Table><TableHeader><TableRow>{fieldNames.map(name => <TableHead key={name}><button type="button" onClick={() => openVisualEditor({ type: 'field', entity, fieldName: name, fieldSchema: properties[name] })} className={`rounded px-1 py-0.5 text-left ${visualEdit ? 'ring-1 ring-primary/30 bg-primary/5 hover:bg-primary/10 cursor-pointer' : 'cursor-default'}`}>{name}{required.includes(name) && <span className="text-destructive ml-1">*</span>}</button></TableHead>)}<TableHead className="w-24 text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{entityRecords.map(record => <TableRow key={record.id}>{fieldNames.map(name => <TableCell key={name} className="text-sm">{displayValue(record.record_data?.[name], properties[name], records)}</TableCell>)}<TableCell className="text-right"><Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditDialog(entity, record)}><Pencil className="w-3.5 h-3.5" /></Button><Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteRecord.mutate(record.id)}><Trash2 className="w-3.5 h-3.5" /></Button></TableCell></TableRow>)}</TableBody></Table></div>
                 )}
               </CardContent>
             </Card>
@@ -238,6 +300,26 @@ export default function LivePreviewSection({ project }) {
             {selectedEntity && Object.entries(normalizeSchema(selectedEntity).properties).map(([fieldName, fieldSchema]) => <div key={fieldName} className="space-y-1.5"><Label htmlFor={fieldName} className="text-xs">{fieldName}{normalizeSchema(selectedEntity).required.includes(fieldName) && <span className="text-destructive ml-1">*</span>}</Label>{renderField(fieldName, fieldSchema, normalizeSchema(selectedEntity).required.includes(fieldName))}</div>)}
           </div>
           <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button><Button onClick={handleSaveRecord} disabled={createRecord.isPending || updateRecord.isPending}>{createRecord.isPending || updateRecord.isPending ? 'Saving...' : 'Save Record'}</Button></div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editTarget} onOpenChange={open => !open && setEditTarget(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Edit preview element</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Label</Label>
+              <Input value={editDraft.label} onChange={e => setEditDraft(d => ({ ...d, label: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Description</Label>
+              <Input value={editDraft.description} onChange={e => setEditDraft(d => ({ ...d, description: e.target.value }))} />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setEditTarget(null)}>Cancel</Button>
+            <Button onClick={() => updatePreviewElement.mutate({ target: editTarget, draft: editDraft })} disabled={!editDraft.label || updatePreviewElement.isPending}>{updatePreviewElement.isPending ? 'Saving...' : 'Save Changes'}</Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
