@@ -336,10 +336,11 @@ export default function LivePreviewSection({ project }) {
     <div className="flex flex-col flex-1 overflow-hidden h-full">
       <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-card/50 flex-shrink-0">
         <Database className="w-4 h-4 text-primary" />
-        <h2 className="text-sm font-semibold text-foreground">Live Data Preview</h2>
+        <h2 className="text-sm font-semibold text-foreground">Live Preview</h2>
         <Badge variant="secondary" className="text-[10px]">{entities.length} entities</Badge>
         <Badge variant="outline" className="text-[10px]">{pages.length} pages</Badge>
         <Badge variant="outline" className="text-[10px]">{records.length} records</Badge>
+        <Badge variant="outline" className="text-[10px]">CSS applied</Badge>
         <div className="flex-1" />
         <div className="flex rounded-md border border-border overflow-hidden">
           <button onClick={() => setPreviewMode('app')} className={`h-7 px-3 text-xs ${previewMode === 'app' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:text-foreground'}`}>App Preview</button>
