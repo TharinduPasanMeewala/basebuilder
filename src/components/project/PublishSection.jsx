@@ -523,7 +523,16 @@ Return ONLY a JSON object (no markdown fences):
           </div>
         )}
 
-        {codeToShow && activeOutputTab === 'preview' && <FinalAppPreview project={project} publishState={{ ...(publishState || {}), code: codeToShow }} />}
+        {codeToShow && activeOutputTab === 'preview' && (
+          <FinalAppPreview
+            project={project}
+            publishState={{ ...(publishState || {}), code: codeToShow }}
+            onSaved={(nextState) => {
+              setPublishState(nextState);
+              setGeneratedCode(nextState.code);
+            }}
+          />
+        )}
 
         {/* Generated Code Explorer */}
         {codeToShow && activeOutputTab === 'code' && (

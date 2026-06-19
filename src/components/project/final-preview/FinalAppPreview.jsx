@@ -11,7 +11,7 @@ function isCalculator(project, publishState) {
 
 const defaultTheme = { page: '', shell: '', header: '', display: '', button: '', button_hover: '', border: '', text: '', primary: '', sidebar: '', surface: '' };
 
-export default function FinalAppPreview({ project, publishState }) {
+export default function FinalAppPreview({ project, publishState, onSaved }) {
   const [localState, setLocalState] = useState(publishState);
   const [theme, setTheme] = useState(defaultTheme);
   const [messages, setMessages] = useState([{ role: 'assistant', content: 'Upload a reference image or describe the design change you want, and I will refine this preview and the generated code.' }]);
@@ -20,7 +20,10 @@ export default function FinalAppPreview({ project, publishState }) {
   const [working, setWorking] = useState(false);
   const fileInputRef = useRef(null);
 
-  useEffect(() => setLocalState(publishState), [publishState]);
+  useEffect(() => {
+    setLocalState(publishState);
+    setTheme({ ...defaultTheme, ...(publishState?.preview_theme || {}) });
+  }, [publishState]);
 
   const uploadFiles = async (selectedFiles) => {
     const incoming = Array.from(selectedFiles || []);
@@ -38,7 +41,19 @@ export default function FinalAppPreview({ project, publishState }) {
 
   const persistCode = async (nextState) => {
     const versions = await base44.entities.ProjectVersion.filter({ project_id: project.id, label: 'publish_state' }, '-created_date', 1);
-    if (versions[0]) await base44.entities.ProjectVersion.update(versions[0].id, { snapshot: nextState, notes: 'Published App - AI refined' });
+    if (versions[0]) {
+      await base44.entities.ProjectVersion.update(versions[0].id, { snapshot: nextState, notes: 'Published App - AI refined' });
+    } else {
+      await base44.entities.ProjectVersion.create({
+        project_id: project.id,
+        version_number: 1,
+        label: 'publish_state',
+        notes: 'Published App - AI refined',
+        snapshot: nextState,
+        phase: project.phase,
+      });
+    }
+    onSaved?.(nextState);
   };
 
   const sendMessage = async () => {
@@ -48,7 +63,8 @@ export default function FinalAppPreview({ project, publishState }) {
     setWorking(true);
     setMessages(prev => [...prev, { role: 'user', content: userText }]);
 
-    const result = await base44.integrations.Core.InvokeLLM({
+    try {
+      const result = await base44.integrations.Core.InvokeLLM({
       prompt: `You are refining a generated app preview and its React code from a user design request.
 App: ${project.name}
 Description: ${project.description || ''}
@@ -73,17 +89,21 @@ Return a practical visual refinement. If you update code, preserve all existing 
       }
     });
 
-    const nextTheme = { ...theme, ...(result.preview_theme || {}) };
-    setTheme(nextTheme);
-    let nextState = localState;
-    if (result.updated_app_jsx && result.updated_app_jsx.includes('export default')) {
-      nextState = { ...localState, code: { ...localState.code, '🎨 src': { ...localState.code['🎨 src'], 'App.jsx': result.updated_app_jsx } } };
+      const nextTheme = { ...theme, ...(result.preview_theme || {}) };
+      setTheme(nextTheme);
+      let nextState = { ...localState, preview_theme: nextTheme };
+      if (result.updated_app_jsx && result.updated_app_jsx.includes('export default')) {
+        nextState = { ...nextState, code: { ...nextState.code, '🎨 src': { ...nextState.code['🎨 src'], 'App.jsx': result.updated_app_jsx } } };
+      }
       setLocalState(nextState);
       await persistCode(nextState);
+      setMessages(prev => [...prev, { role: 'assistant', content: `${result.summary || 'I refined the preview design and updated the generated app code where applicable.'}\n\nSaved to the generated code package.` }]);
+      setFiles([]);
+    } catch (e) {
+      setMessages(prev => [...prev, { role: 'assistant', content: `I couldn't save that change: ${e.message}` }]);
+    } finally {
+      setWorking(false);
     }
-    setMessages(prev => [...prev, { role: 'assistant', content: result.summary || 'I refined the preview design and updated the generated app code where applicable.' }]);
-    setFiles([]);
-    setWorking(false);
   };
 
   return <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-4">
