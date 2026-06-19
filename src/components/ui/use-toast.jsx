@@ -63,26 +63,11 @@ export const reducer = (state, action) => {
     case actionTypes.DISMISS_TOAST: {
       const { toastId } = action;
 
-      // ! Side effects ! - This could be extracted into a dismissToast() action,
-      // but I'll keep it here for simplicity
-      if (toastId) {
-        addToRemoveQueue(toastId);
-      } else {
-        state.toasts.forEach((toast) => {
-          addToRemoveQueue(toast.id);
-        });
-      }
-
       return {
         ...state,
-        toasts: state.toasts.map((t) =>
-          t.id === toastId || toastId === undefined
-            ? {
-                ...t,
-                open: false,
-              }
-            : t
-        ),
+        toasts: toastId === undefined
+          ? []
+          : state.toasts.filter((t) => t.id !== toastId),
       };
     }
     case actionTypes.REMOVE_TOAST:
@@ -134,6 +119,10 @@ function toast({ ...props }) {
     },
   });
 
+  if (props.duration !== Infinity) {
+    setTimeout(dismiss, props.duration || 4000);
+  }
+
   return {
     id,
     dismiss,
@@ -161,4 +150,4 @@ function useToast() {
   };
 }
 
-export { useToast, toast }; 
+export { useToast, toast };
