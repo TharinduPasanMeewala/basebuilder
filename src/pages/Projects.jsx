@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Filter, FolderOpen } from 'lucide-react';
+import { Plus, Search, Filter, FolderOpen, Globe } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,6 +8,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from '@/components/ui/select';
 import ProjectCard from '@/components/project/ProjectCard';
+import CloneWebsiteDialog from '@/components/project/CloneWebsiteDialog';
 
 const PHASES = ['all', 'discovery', 'analysis', 'design', 'architecture', 'review', 'generation', 'completed'];
 const TYPES = [
@@ -29,6 +30,7 @@ export default function Projects() {
   const [search, setSearch] = useState('');
   const [phaseFilter, setPhaseFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [showWebsiteClone, setShowWebsiteClone] = useState(false);
 
   useEffect(() => {
     loadProjects();
@@ -55,10 +57,16 @@ export default function Projects() {
           <h1 className="text-2xl font-bold text-foreground tracking-tight">Projects</h1>
           <p className="text-muted-foreground text-sm mt-1">{projects.length} project{projects.length !== 1 ? 's' : ''}</p>
         </div>
-        <Button onClick={() => navigate('/projects/new')} className="gap-2">
-          <Plus className="w-4 h-4" />
-          New Project
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setShowWebsiteClone(true)} className="gap-2">
+            <Globe className="w-4 h-4" />
+            Clone Website
+          </Button>
+          <Button onClick={() => navigate('/projects/new')} className="gap-2">
+            <Plus className="w-4 h-4" />
+            New Project
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -120,6 +128,7 @@ export default function Projects() {
           ))}
         </div>
       )}
+      <CloneWebsiteDialog open={showWebsiteClone} onClose={() => setShowWebsiteClone(false)} />
     </div>
   );
 }

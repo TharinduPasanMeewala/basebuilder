@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Sparkles, TrendingUp, FolderOpen, CheckCircle, Clock, ArrowRight, Zap, Github } from 'lucide-react';
+import { Plus, Sparkles, TrendingUp, FolderOpen, CheckCircle, Clock, ArrowRight, Zap, Github, Globe } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import ProjectCard from '@/components/project/ProjectCard';
 import ImportFromGitHub from '@/components/project/ImportFromGitHub';
+import CloneWebsiteDialog from '@/components/project/CloneWebsiteDialog';
 
 const STATS_CONFIG = [
   { label: 'Total Projects', icon: FolderOpen, color: 'text-primary', bg: 'bg-primary/10', key: 'total' },
@@ -28,6 +29,7 @@ export default function Dashboard() {
   const [blueprints, setBlueprints] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showGitHubImport, setShowGitHubImport] = useState(false);
+  const [showWebsiteClone, setShowWebsiteClone] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -60,6 +62,10 @@ export default function Dashboard() {
           <p className="text-muted-foreground text-sm mt-1">Design software through AI-powered conversations</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setShowWebsiteClone(true)} className="gap-2 shadow-sm">
+            <Globe className="w-4 h-4" />
+            Clone Website
+          </Button>
           <Button variant="outline" onClick={() => setShowGitHubImport(true)} className="gap-2 shadow-sm">
             <Github className="w-4 h-4" />
             Import from GitHub
@@ -158,6 +164,7 @@ export default function Dashboard() {
         </div>
       </div>
       <ImportFromGitHub open={showGitHubImport} onClose={() => setShowGitHubImport(false)} />
+      <CloneWebsiteDialog open={showWebsiteClone} onClose={() => setShowWebsiteClone(false)} />
     </div>
   );
 }
