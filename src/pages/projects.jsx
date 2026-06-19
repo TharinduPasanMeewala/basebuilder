@@ -13,11 +13,21 @@ export default function Projects() {
   const [stats, setStats] = useState({});
   useEffect(() => { loadStats(); }, [ctx.scopedProjects.length]);
   const loadStats = async () => {
-    const next = {};
-    for (const p of ctx.scopedProjects) {
-      const [e, f, a] = await Promise.all([base44.entities.EntityDefinition.filter({ project_id: p.id }), base44.entities.FunctionDefinition.filter({ project_id: p.id }), base44.entities.AgentDefinition.filter({ project_id: p.id })]);
-      next[p.id] = { e: e.length, f: f.length, a: a.length };
-    }
+    if (!ctx.selectedWorkspace) return setStats({});
+    const projectIds = new Set(ctx.scopedProjects.map(p => p.id));
+    if (projectIds.size === 0) return setStats({});
+
+    // Read each definition type once, then count locally to avoid rate limits on workspaces with many projects.
+    const [entities, functions, agents] = await Promise.all([
+      base44.entities.EntityDefinition.list('-created_date', 500),
+      base44.entities.FunctionDefinition.list('-created_date', 500),
+      base44.entities.AgentDefinition.list('-created_date', 500),
+    ]);
+
+    const next = Object.fromEntries(ctx.scopedProjects.map(p => [p.id, { e: 0, f: 0, a: 0 }]));
+    entities.filter(x => projectIds.has(x.project_id)).forEach(x => { next[x.project_id].e += 1; });
+    functions.filter(x => projectIds.has(x.project_id)).forEach(x => { next[x.project_id].f += 1; });
+    agents.filter(x => projectIds.has(x.project_id)).forEach(x => { next[x.project_id].a += 1; });
     setStats(next);
   };
   const create = async () => { await ctx.createProject({ name: name || 'Untitled App', status: 'draft', app_type: 'custom_application' }); setName(''); };
