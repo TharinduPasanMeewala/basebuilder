@@ -6,8 +6,24 @@ import DesignInspector from './DesignInspector';
 const pageIcon = { dashboard: LayoutDashboard, list: Table2, detail: FileText, form: FileText, report: BarChart3, settings: Settings };
 const sampleRows = (entity) => [1, 2, 3].map(i => Object.fromEntries(Object.keys(entity.schema?.properties || {}).slice(0, 4).map(f => [f, `${f.replace(/_/g, ' ')} ${i}`])));
 const densityPad = { compact: 'p-4', comfortable: 'p-6', spacious: 'p-8' };
+const DEFAULT_STYLE = { primary_color: '#6366f1', accent_color: '#10b981', background_color: '#f8fafc', surface_color: '#ffffff', text_color: '#0f172a', font_family: 'Inter', radius: 16, density: 'comfortable' };
+
+function isCalculatorPage(page) {
+  return `${page?.name || ''} ${page?.description || ''} ${page?.route || ''}`.toLowerCase().includes('calculator');
+}
+
+function CalculatorPreview({ designSystem }) {
+  const buttons = [['C','√','%','CE'], ['7','8','9','+'], ['4','5','6','×'], ['1','2','3','−'], ['0','.','.','=']];
+  return <div className="min-h-[480px] flex items-start justify-center bg-[#d9d9dc] p-0">
+    <div className="w-full max-w-[650px] bg-[#dedee2] border-[3px] border-[#77777c] rounded-md overflow-hidden shadow-xl">
+      <div className="h-16 bg-[#c5c5c9] flex items-center px-4 border-b border-[#b6b6bb]"><h1 className="text-[40px] text-black font-normal flex-1">Calculator</h1><div className="w-12 h-12 mr-3 rounded-md border-2 border-[#808086] bg-[#f3f3f5] text-black text-5xl leading-none flex items-center justify-center">−</div><div className="w-12 h-12 rounded-md border-2 border-[#808086] bg-[#f3f3f5] text-black text-5xl leading-none flex items-center justify-center">×</div></div>
+      <div className="p-5 space-y-8"><div className="h-40 bg-[#f7f7f8] border-[3px] border-[#77777c] rounded-md flex items-center justify-end px-6"><span className="text-[120px] leading-none text-black">0</span></div><div className="grid grid-cols-4 gap-4">{buttons.flat().map((b, i) => <button key={b+i} className="h-20 rounded-md border-[3px] border-[#85858b] bg-[#c9c9cd] text-black text-[56px] leading-none flex items-center justify-center">{b}</button>)}</div></div>
+    </div>
+  </div>;
+}
 
 function PageBody({ page, entities, designMode, selectedId, selectElement, designs, designSystem }) {
+  if (isCalculatorPage(page)) return <CalculatorPreview designSystem={designSystem} />;
   const linked = entities.find(e => page.description?.toLowerCase().includes(e.name?.toLowerCase())) || entities[0];
   const fields = Object.keys(linked?.schema?.properties || {}).slice(0, 5);
   const radius = designSystem.radius || 16;
@@ -16,7 +32,7 @@ function PageBody({ page, entities, designMode, selectedId, selectElement, desig
   return <Designable id="data-table" label="Data table" enabled={designMode} selectedId={selectedId} onSelect={selectElement} settings={designs['data-table']} className="overflow-hidden border" style={{ borderRadius: radius }}><table className="w-full text-sm"><thead style={{ background: `${designSystem.primary_color}14` }}><tr>{fields.map(f=><th key={f} className="text-left p-3 capitalize text-xs">{f.replace(/_/g,' ')}</th>)}</tr></thead><tbody>{sampleRows(linked || {}).map((r,i)=><tr key={i} className="border-t">{fields.map(f=><td key={f} className="p-3 opacity-75">{r[f]}</td>)}</tr>)}</tbody></table></Designable>;
 }
 
-export default function AppPreviewCanvas({ pages, entities, designMode = false, designSystem }) {
+export default function AppPreviewCanvas({ pages, entities, designMode = false, designSystem = DEFAULT_STYLE }) {
   const [activeId, setActiveId] = useState(pages[0]?.id);
   const [selected, setSelected] = useState(null);
   const [designs, setDesigns] = useState({});
