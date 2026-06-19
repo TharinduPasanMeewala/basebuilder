@@ -62,6 +62,7 @@ export default function LivePreviewSection({ project }) {
   const [formData, setFormData] = useState({});
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [previewMode, setPreviewMode] = useState('app');
+  const [designMode, setDesignMode] = useState(false);
   const [visualEdit, setVisualEdit] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [editDraft, setEditDraft] = useState({ label: '', description: '' });
@@ -347,13 +348,14 @@ export default function LivePreviewSection({ project }) {
           <button onClick={() => setPreviewMode('data')} className={`h-7 px-3 text-xs border-l border-border ${previewMode === 'data' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:text-foreground'}`}>Data Records</button>
         </div>
         <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" onClick={() => generateUiPreview.mutate()} disabled={generateUiPreview.isPending}><Sparkles className="w-3.5 h-3.5" /> {generateUiPreview.isPending ? 'Generating...' : 'Generate UI Preview'}</Button>
+        {previewMode === 'app' && <Button size="sm" variant={designMode ? 'default' : 'outline'} className="h-7 text-xs gap-1.5" onClick={() => setDesignMode(v => !v)}><MousePointerClick className="w-3.5 h-3.5" /> {designMode ? 'Design On' : 'Design Mode'}</Button>}
         {previewMode === 'data' && <Button size="sm" variant={visualEdit ? 'default' : 'outline'} className="h-7 text-xs gap-1.5" onClick={() => setVisualEdit(v => !v)}><MousePointerClick className="w-3.5 h-3.5" /> {visualEdit ? 'Editing On' : 'Visual Edit'}</Button>}
         <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" onClick={refreshAll}><RefreshCw className="w-3.5 h-3.5" /> Refresh</Button>
         {records.length > 0 && <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 text-destructive" onClick={() => resetPreviewData.mutate()} disabled={resetPreviewData.isPending}><RotateCcw className="w-3.5 h-3.5" /> Reset Preview Data</Button>}
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {previewMode === 'app' ? <AppPreviewCanvas pages={pages} entities={entities} /> : entities.length === 0 ? (
+        {previewMode === 'app' ? <AppPreviewCanvas pages={pages} entities={entities} designMode={designMode} /> : entities.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-dashed border-border rounded-xl bg-card/40">
             <Database className="w-10 h-10 text-muted-foreground/40 mb-3" />
             <h3 className="font-semibold text-foreground text-sm mb-1">No entities yet</h3>
