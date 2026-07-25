@@ -11,6 +11,7 @@ import Projects from '@/pages/Projects';
 import NewProject from '@/pages/NewProject';
 import ProjectWorkspace from '@/pages/ProjectWorkspace';
 import PublishedApp from '@/pages/PublishedApp';
+import Settings from '@/pages/Settings';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -43,6 +44,7 @@ const AuthenticatedApp = () => {
         <Route path="/projects" element={<Projects />} />
         <Route path="/projects/:id" element={<ProjectWorkspace />} />
         <Route path="/projects/:id/published" element={<PublishedApp />} />
+        <Route path="/settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>

@@ -8,6 +8,8 @@ import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { generateCodeFiles } from '@/lib/codegen';
 import FinalAppPreview from '@/components/project/final-preview/FinalAppPreview';
+import { invokeCodeAI, getUserAIPreference } from '@/lib/codeAI';
+import { Switch } from '@/components/ui/switch';
 
 const PUBLISH_STEPS = [
   { id: 'validate',    label: 'Validating blueprint',         icon: Shield,   group: 'prep' },
@@ -44,9 +46,11 @@ export default function PublishSection({ project, onRefresh }) {
   const [copied, setCopied] = useState(null);
   const [activeOutputTab, setActiveOutputTab] = useState('preview');
   const [loading, setLoading] = useState(true);
+  const [useCustomOpenAI, setUseCustomOpenAI] = useState(false);
   const logsEndRef = useRef(null);
 
   useEffect(() => { loadState(); }, [project.id]);
+  useEffect(() => { getUserAIPreference().then(p => setUseCustomOpenAI(p.useCustomOpenAI)); }, []);
   useEffect(() => { logsEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [logs]);
 
   const loadState = async () => {
@@ -67,6 +71,7 @@ export default function PublishSection({ project, onRefresh }) {
   };
 
   const delay = (ms) => new Promise(r => setTimeout(r, ms));
+  const callAI = (args) => invokeCodeAI({ ...args, useCustom: useCustomOpenAI });
 
   const runPublish = async () => {
     setPublishing(true);
@@ -121,7 +126,7 @@ export default function PublishSection({ project, onRefresh }) {
       setStep('backend', 'running');
       addLog('Generating backend API code with AI…');
 
-      const backendCode = await base44.integrations.Core.InvokeLLM({
+      const backendCode = await callAI({
         prompt: `Generate production-ready ${backendStack} backend code for "${project.name}" (${project.type?.replace(/_/g, ' ')}).
 
 API Endpoints to implement:
@@ -152,7 +157,7 @@ Return ONLY a JSON object with these keys (no markdown):
       setStep('database', 'running');
       addLog('Generating database schema migrations…');
 
-      const dbCode = await base44.integrations.Core.InvokeLLM({
+      const dbCode = await callAI({
         prompt: `Generate a complete ${dbStack} database schema for "${project.name}".
 
 Entities:
@@ -184,7 +189,7 @@ Return ONLY a JSON object (no markdown):
       setStep('frontend', 'running');
       addLog(`Generating ${frontendStack} + Vite + Tailwind frontend…`);
 
-      const frontendCode = await base44.integrations.Core.InvokeLLM({
+      const frontendCode = await callAI({
         prompt: `Generate a complete Vite + React + Tailwind CSS project for "${project.name}" (${project.type?.replace(/_/g, ' ')}).
 
 Pages needed:
@@ -354,6 +359,10 @@ Return ONLY a JSON object (no markdown fences):
           </span>
         )}
         <div className="flex-1" />
+        <label className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground cursor-pointer mr-1">
+          <Switch checked={useCustomOpenAI} onCheckedChange={setUseCustomOpenAI} />
+          Use my OpenAI key
+        </label>
         <Button
           size="sm"
           className="h-7 text-xs gap-1.5"

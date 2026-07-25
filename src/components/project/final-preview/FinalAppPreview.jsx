@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Image, Loader2, Send, Sparkles } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
+import { invokeCodeAI, getUserAIPreference } from '@/lib/codeAI';
+import { Switch } from '@/components/ui/switch';
 import CalculatorFinalPreview from './CalculatorFinalPreview';
 import GenericFinalPreview from './GenericFinalPreview';
 
@@ -18,12 +20,17 @@ export default function FinalAppPreview({ project, publishState, onSaved }) {
   const [input, setInput] = useState('');
   const [files, setFiles] = useState([]);
   const [working, setWorking] = useState(false);
+  const [useCustomOpenAI, setUseCustomOpenAI] = useState(false);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
     setLocalState(publishState);
     setTheme({ ...defaultTheme, ...(publishState?.preview_theme || {}) });
   }, [publishState]);
+
+  useEffect(() => {
+    getUserAIPreference().then(p => setUseCustomOpenAI(p.useCustomOpenAI));
+  }, []);
 
   const uploadFiles = async (selectedFiles) => {
     const incoming = Array.from(selectedFiles || []);
@@ -64,7 +71,7 @@ export default function FinalAppPreview({ project, publishState, onSaved }) {
     setMessages(prev => [...prev, { role: 'user', content: userText }]);
 
     try {
-      const result = await base44.integrations.Core.InvokeLLM({
+      const result = await invokeCodeAI({ useCustom: useCustomOpenAI,
       prompt: `You are refining a generated app preview and its React code from a user design request.
 App: ${project.name}
 Description: ${project.description || ''}
@@ -122,6 +129,9 @@ Return a practical visual refinement. If you update code, preserve all existing 
         <textarea value={input} onChange={e => setInput(e.target.value)} placeholder="Example: make it match this image, use softer shadows, bigger display, rounded buttons..." className="w-full h-20 resize-none rounded-lg border border-input bg-background px-3 py-2 text-xs outline-none focus:ring-1 focus:ring-ring" />
         <div className="flex gap-2">
           <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={e => uploadFiles(e.target.files)} />
+          <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer">
+            <Switch checked={useCustomOpenAI} onCheckedChange={setUseCustomOpenAI} /> OpenAI
+          </label>
           <button onClick={() => fileInputRef.current?.click()} disabled={working} className="h-8 px-3 rounded-md border border-border text-xs flex items-center gap-1.5 hover:bg-muted"><Image className="w-3.5 h-3.5" /> Image</button>
           <button onClick={sendMessage} disabled={working || (!input.trim() && files.length === 0)} className="h-8 px-3 rounded-md bg-primary text-primary-foreground text-xs flex items-center gap-1.5 ml-auto disabled:opacity-50">{working ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} Apply</button>
         </div>
