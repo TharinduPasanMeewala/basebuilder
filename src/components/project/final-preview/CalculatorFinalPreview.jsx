@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-const rows = [['C','√','%','CE'], ['7','8','9','+'], ['4','5','6','×'], ['1','2','3','−'], ['0','.','.','=']];
+const rows = [['C','√','%','CE'], ['7','8','9','+'], ['4','5','6','×'], ['1','2','3','−'], ['0','.','÷','=']];
 const num = v => Number.isFinite(Number(v)) ? Number(v) : 0;
 
 export default function CalculatorFinalPreview({ title = 'Calculator', theme = {} }) {
@@ -10,7 +10,7 @@ export default function CalculatorFinalPreview({ title = 'Calculator', theme = {
   const [fresh, setFresh] = useState(true);
   const [minimized, setMinimized] = useState(false);
   const format = v => Number.isFinite(v) ? String(Number(v.toFixed(10))) : 'Error';
-  const calc = (a, o, b) => o === '+' ? a + b : o === '−' ? a - b : o === '×' ? a * b : b;
+  const calc = (a, o, b) => o === '+' ? a + b : o === '−' ? a - b : o === '×' ? a * b : o === '÷' ? a / b : b;
   const clear = () => { setDisplay('0'); setStored(null); setOp(null); setFresh(true); };
   const digit = key => { if (key === '.' && display.includes('.') && !fresh) return; setDisplay(fresh ? (key === '.' ? '0.' : key) : (display === '0' && key !== '.' ? key : display + key)); setFresh(false); };
   const operator = key => { const current = num(display); if (stored !== null && op && !fresh) { const next = calc(stored, op, current); setStored(next); setDisplay(format(next)); } else setStored(current); setOp(key); setFresh(true); };

@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { MonitorPlay, RefreshCw } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
-import PreviewFrame from './preview/PreviewFrame';
+import LivePreviewSection from '@/components/LivePreviewSection';
 import StudioChat from './studio/StudioChat';
-import VisualEditor from './studio/VisualEditor';
 import { MessageSquare, Brush } from 'lucide-react';
 
 export default function StudioSection({ project, onRefresh }) {
+  const queryClient = useQueryClient();
   const [entities, setEntities] = useState([]);
   const [pages, setPages] = useState([]);
   const [design, setDesign] = useState({ app_name: '', primary: '#2563eb', sidebar_dark: true });
@@ -14,12 +15,11 @@ export default function StudioSection({ project, onRefresh }) {
   const [loading, setLoading] = useState(true);
   const [messages, setMessages] = useState([]);
   const [busy, setBusy] = useState(false);
-  const [panel, setPanel] = useState('chat');
+  const [panel, setPanel] = useState('design');
 
   useEffect(() => { loadData(); }, [project.id]);
 
   const loadData = async () => {
-    setLoading(true);
     const [ents, pgs, designs] = await Promise.all([
       base44.entities.DataEntity.filter({ project_id: project.id }),
       base44.entities.PageSpec.filter({ project_id: project.id }),
@@ -104,7 +104,12 @@ export default function StudioSection({ project, onRefresh }) {
     if (newDesign !== design) {
       setDesign(newDesign);
       await persistDesign(newDesign);
+      const saved = await base44.entities.ProjectDesign.filter({ project_id: project.id }, '-updated_date', 1);
+      const payload = { primary_color: newDesign.primary, project_id: project.id };
+      if (saved[0]) await base44.entities.ProjectDesign.update(saved[0].id, payload);
+      else await base44.entities.ProjectDesign.create(payload);
     }
+    await Promise.all(['dataEntitiesForPreview', 'entityDefinitions', 'pageSpecsForPreview', 'projectDesign'].map(key => queryClient.invalidateQueries({ queryKey: [key, project.id] })));
     return applied;
   };
 
@@ -116,7 +121,7 @@ export default function StudioSection({ project, onRefresh }) {
         ...(imageUrls.length > 0 ? { file_urls: imageUrls } : {}),
         prompt: `You are an AI app editor for "${design.app_name || project.name}" (${project.type?.replace(/_/g, ' ')}).
 
-YOU HAVE FULL PERMISSION to modify this app. You are NOT a support assistant — you are the editor itself. NEVER refuse, NEVER tell the user to contact technical support, and NEVER say you can't update the app. Every change request MUST be translated into one or more of the valid actions below.
+You edit the project specifications through the valid actions below. Preserve working models and screens. Never claim an action that is unsupported or was not requested.
 
 Current data entities:
 ${entities.map(e => `- ${e.name}: ${(e.fields || []).map(f => f.name).join(', ') || 'no fields'}`).join('\n') || '(none)'}
@@ -137,9 +142,10 @@ Decide which actions to apply. Valid actions:
 - set_design: design {app_name, primary (hex color), sidebar_dark (boolean)} — include only fields to change
 
 Mapping rules — always act:
-- "Add invoice functionality" / "fix the add button for X" → create_entity for X (with sensible fields) if it doesn't exist, plus a create_page (type "form" or "list") for it.
-- Any feature request → model it as entities + pages that represent that feature.
-- Only return an empty actions list for pure greetings or questions, never for change requests.
+- Do not create duplicate entities or pages to repair an existing button. The preview already supports record create/read/update/delete.
+- Connect new list or form pages by naming the data entity explicitly in page_description. Create only missing models and pages.
+- For screen styling or screen data connections, direct the user to Visual screen editor, select the heading or element, edit it, then Save visual edits.
+- Actions here edit specifications, not arbitrary application code. Explain unsupported behaviors honestly; do not claim workflows or external services are implemented.
 
 ${imageUrls.length > 0 ? '\nThe user attached image(s). Analyze them carefully for UI and feature ideas — entities, fields, pages, colors, app name — and turn those ideas into actions.' : ''}${roundtable ? '\nAlso include a "roundtable" array with brief one-sentence expert comments about this change from relevant agents only (Business Analyst, DB Architect, UI/UX Architect, Backend Architect, QA Architect).' : ''}
 
@@ -182,16 +188,6 @@ Also write a short friendly reply (1-2 sentences) describing what you did.`,
     setBusy(false);
   };
 
-  const handleDesignChange = async (partial) => {
-    const newDesign = { ...design, ...partial };
-    setDesign(newDesign);
-    await persistDesign(newDesign);
-  };
-
-  const handleAskDesigner = (prompt) => {
-    setPanel('chat');
-    handleSend(`As a professional UI/UX designer: ${prompt}`, [], true);
-  };
 
   if (loading) {
     return <div className="flex items-center justify-center flex-1"><div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" /></div>;
@@ -207,6 +203,7 @@ Also write a short friendly reply (1-2 sentences) describing what you did.`,
           <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> LIVE
         </span>
         <div className="flex-1" />
+        <button className="text-xs text-primary border rounded-md px-3 py-1" onClick={() => setPanel(panel === 'design' ? 'chat' : 'design')}>{panel === 'design' ? 'AI Chat' : 'Visual screen editor'}</button>
         <button onClick={loadData} className="text-muted-foreground hover:text-foreground transition-colors" title="Refresh preview">
           <RefreshCw className="w-3.5 h-3.5" />
         </button>
@@ -214,7 +211,7 @@ Also write a short friendly reply (1-2 sentences) describing what you did.`,
 
       {/* Split: chat | preview */}
       <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
-        <div className="w-full md:w-80 lg:w-96 border-b md:border-b-0 md:border-r border-border flex-shrink-0 h-72 md:h-auto bg-card/30 flex flex-col">
+        {panel === 'chat' && <div className="w-full md:w-72 border-b md:border-b-0 md:border-r border-border flex-shrink-0 h-72 md:h-auto bg-card/30 flex flex-col">
           <div className="flex border-b border-border flex-shrink-0">
             {[
               { key: 'chat', label: 'AI Chat', icon: MessageSquare },
@@ -232,20 +229,11 @@ Also write a short friendly reply (1-2 sentences) describing what you did.`,
             ))}
           </div>
           <div className="flex-1 overflow-hidden">
-            {panel === 'chat'
-              ? <StudioChat messages={messages} busy={busy} onSend={handleSend} />
-              : <VisualEditor design={design} onChange={handleDesignChange} onAskDesigner={handleAskDesigner} busy={busy} />}
+            <StudioChat messages={messages} busy={busy} onSend={handleSend} />
           </div>
-        </div>
-        <div className="flex-1 overflow-y-auto p-4 bg-muted/20">
-          <PreviewFrame
-            project={project}
-            entities={entities}
-            pages={pages}
-            design={design}
-            editMode={false}
-            onEditName={() => {}}
-          />
+        </div>}
+        <div className="flex-1 min-w-0 overflow-hidden bg-muted/20">
+          <LivePreviewSection key={project.id} project={project} initialDesignMode={panel === 'design'} previewName={design.app_name || project.name} sidebarDark={design.sidebar_dark} />
         </div>
       </div>
     </div>

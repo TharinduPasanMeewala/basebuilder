@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, RefreshCw, Trash2, Pencil, Database, RotateCcw, MousePointerClick, Sparkles } from 'lucide-react';
 import AppPreviewCanvas from '@/components/live-preview/AppPreviewCanvas';
+import RuntimeRecordForm from '@/components/live-preview/RuntimeRecordForm';
 import BrandStylePanel from '@/components/live-preview/BrandStylePanel';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
@@ -66,14 +67,15 @@ function displayValue(value, field, allRecords) {
   return String(value);
 }
 
-export default function LivePreviewSection({ project }) {
+export default function LivePreviewSection({ project, initialDesignMode = false, previewName, sidebarDark }) {
   const queryClient = useQueryClient();
   const [selectedEntity, setSelectedEntity] = useState(null);
   const [editingRecord, setEditingRecord] = useState(null);
   const [formData, setFormData] = useState({});
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [previewMode, setPreviewMode] = useState('app');
-  const [designMode, setDesignMode] = useState(false);
+  const [designMode, setDesignMode] = useState(initialDesignMode);
+  useEffect(() => { setDesignMode(initialDesignMode); }, [initialDesignMode]);
   const [showBrandPanel, setShowBrandPanel] = useState(false);
   const [brandStyle, setBrandStyle] = useState(DEFAULT_BRAND_STYLE);
   const [visualEdit, setVisualEdit] = useState(false);
@@ -116,8 +118,7 @@ export default function LivePreviewSection({ project }) {
   const entityDefinitions = entitiesQuery.data || [];
   const dataEntities = dataEntitiesQuery.data || [];
   const entities = useMemo(() => {
-    if (entityDefinitions.length > 0) return entityDefinitions;
-    return dataEntities.map(entity => ({
+    const modeled = dataEntities.map(entity => ({
       id: entity.id,
       name: entity.name,
       display_name: entity.name,
@@ -138,6 +139,7 @@ export default function LivePreviewSection({ project }) {
         required: (entity.fields || []).filter(field => field.required).map(field => field.name),
       },
     }));
+    return [...entityDefinitions, ...modeled.filter(entity => !entityDefinitions.some(existing => existing.name.toLowerCase() === entity.name.toLowerCase()))];
   }, [entityDefinitions, dataEntities]);
   const records = recordsQuery.data || [];
   const pages = pagesQuery.data || [];
@@ -196,7 +198,7 @@ export default function LivePreviewSection({ project }) {
   const generateUiPreview = useMutation({
     mutationFn: async () => {
       const result = await base44.integrations.Core.InvokeLLM({
-        prompt: `Generate UX/UI page designs for this app so they can be shown in a live app preview.\nProject: ${project.name}\nDescription: ${project.description || ''}\nType: ${project.type}\nData models: ${JSON.stringify(entities.map(e => ({ name: e.name, description: e.description, fields: Object.keys(e.schema?.properties || {}) })))}\nExisting pages: ${JSON.stringify(pages.map(p => ({ name: p.name, type: p.type, route: p.route })))}\nCreate practical screens such as dashboard, list, detail, form, report, or settings pages.`,
+        prompt: `Generate UX/UI page designs for this app so they can be shown in a live app preview.\nProject: ${project.name}\nDescription: ${project.description || ''}\nType: ${project.type}\nData models: ${JSON.stringify(entities.map(e => ({ name: e.name, description: e.description, fields: Object.keys(e.schema?.properties || {}) })))}\nExisting pages: ${JSON.stringify(pages.map(p => ({ name: p.name, type: p.type, route: p.route })))}\nCreate only missing practical dashboard, list, detail, and form screens. Do not duplicate existing screens. Every non-dashboard page must have a component with data_source exactly equal to an existing data model name, type (table or form), name and description. Use existing fields only. The runtime supports working CRUD, search and record details; do not claim integrations or specialized visualizations are implemented.`,
         response_json_schema: {
           type: 'object',
           properties: {
@@ -205,7 +207,7 @@ export default function LivePreviewSection({ project }) {
               items: {
                 type: 'object',
                 properties: {
-                  name: { type: 'string' }, route: { type: 'string' }, type: { type: 'string' }, description: { type: 'string' }, module: { type: 'string' }, components: { type: 'array', items: { type: 'object' } }
+                  name: { type: 'string' }, route: { type: 'string' }, type: { type: 'string' }, description: { type: 'string' }, module: { type: 'string' }, components: { type: 'array', items: { type: 'object', properties: { type: { type: 'string' }, name: { type: 'string' }, description: { type: 'string' }, data_source: { type: 'string' } }, required: ['data_source'] } }
                 }
               }
             }
@@ -296,78 +298,19 @@ export default function LivePreviewSection({ project }) {
     setIsDialogOpen(true);
   };
 
-  const handleInputChange = (fieldName, value, type) => {
-    const parsed = type === 'number' ? (value === '' ? '' : Number(value)) : value;
-    setFormData(prev => ({ ...prev, [fieldName]: parsed }));
-  };
 
-  const handleSaveRecord = () => {
-    if (!selectedEntity) return;
-    const payload = {
-      project_id: project.id,
-      entity_definition_id: selectedEntity.id,
-      entity_name: selectedEntity.name,
-      record_data: formData,
-    };
-    if (editingRecord) updateRecord.mutate({ id: editingRecord.id, data: payload });
-    else createRecord.mutate(payload);
+  const saveRuntimeRecord = async (entity, data, record) => {
+    const payload = { project_id: project.id, entity_definition_id: entity.id, entity_name: entity.name, record_data: data };
+    if (record) await updateRecord.mutateAsync({ id: record.id, data: payload });
+    else await createRecord.mutateAsync(payload);
   };
 
   const refreshAll = () => { invalidateEntities(); invalidateRecords(); invalidatePages(); invalidateDesign(); };
 
-  const renderField = (fieldName, fieldSchema, required) => {
-    const type = getFieldType(fieldSchema);
-    const value = formData[fieldName];
 
-    if (type === 'enum') {
-      return (
-        <Select value={value || ''} onValueChange={val => handleInputChange(fieldName, val, type)} required={required}>
-          <SelectTrigger id={fieldName}>
-            <SelectValue placeholder={`Select ${fieldName.replace(/_/g, ' ')}`} />
-          </SelectTrigger>
-          <SelectContent>
-            {(fieldSchema.enum || []).map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      );
-    }
 
-    if (type === 'boolean') {
-      return (
-        <div className="flex items-center gap-2 rounded-md border border-input bg-background px-3 py-2">
-          <Switch id={fieldName} checked={!!value} onCheckedChange={checked => handleInputChange(fieldName, checked, type)} />
-          <span className="text-sm text-muted-foreground">{value ? 'Yes' : 'No'}</span>
-        </div>
-      );
-    }
-
-    if (type === 'reference') {
-      const related = getReferenceName(fieldSchema);
-      const options = recordsByEntity[related] || [];
-      return (
-        <Select value={value || ''} onValueChange={val => handleInputChange(fieldName, val, type)} required={required}>
-          <SelectTrigger id={fieldName}>
-            <SelectValue placeholder={`Select ${related || 'record'}`} />
-          </SelectTrigger>
-          <SelectContent>
-            {options.map(record => <SelectItem key={record.id} value={record.id}>{recordLabel(record)}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      );
-    }
-
-    return (
-      <Input
-        id={fieldName}
-        value={value ?? ''}
-        required={required}
-        type={type === 'number' ? 'number' : type === 'date' ? 'date' : type === 'datetime' ? 'datetime-local' : 'text'}
-        onChange={e => handleInputChange(fieldName, e.target.value, type)}
-        placeholder={fieldSchema.description || fieldName}
-      />
-    );
-  };
-
+  const previewError = entitiesQuery.error || dataEntitiesQuery.error || recordsQuery.error || pagesQuery.error || designQuery.error;
+  if (previewError) return <div className="p-6 text-sm text-destructive" role="alert">Could not load preview: {previewError.message}<Button className="ml-3" variant="outline" onClick={refreshAll}>Retry</Button></div>;
   if (isLoading) return <div className="flex items-center justify-center flex-1"><div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" /></div>;
 
   return (
@@ -386,15 +329,17 @@ export default function LivePreviewSection({ project }) {
         </div>
         <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" onClick={() => generateUiPreview.mutate()} disabled={generateUiPreview.isPending}><Sparkles className="w-3.5 h-3.5" /> {generateUiPreview.isPending ? 'Generating...' : 'Generate UI Preview'}</Button>
         {previewMode === 'app' && <Button size="sm" variant={showBrandPanel ? 'default' : 'outline'} className="h-7 text-xs gap-1.5" onClick={() => setShowBrandPanel(v => !v)}>Brand Style</Button>}
-        {previewMode === 'app' && <Button size="sm" variant={designMode ? 'default' : 'outline'} className="h-7 text-xs gap-1.5" onClick={() => setDesignMode(v => !v)}><MousePointerClick className="w-3.5 h-3.5" /> {designMode ? 'Design On' : 'Design Mode'}</Button>}
+        {previewMode === 'app' && <Button size="sm" variant={designMode ? 'default' : 'outline'} className="h-7 text-xs gap-1.5" onClick={() => setDesignMode(v => !v)}><MousePointerClick className="w-3.5 h-3.5" /> {designMode ? 'Switch to Run' : 'Edit screen'}</Button>}
         {previewMode === 'data' && <Button size="sm" variant={visualEdit ? 'default' : 'outline'} className="h-7 text-xs gap-1.5" onClick={() => setVisualEdit(v => !v)}><MousePointerClick className="w-3.5 h-3.5" /> {visualEdit ? 'Editing On' : 'Visual Edit'}</Button>}
         <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" onClick={refreshAll}><RefreshCw className="w-3.5 h-3.5" /> Refresh</Button>
         {records.length > 0 && <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 text-destructive" onClick={() => resetPreviewData.mutate()} disabled={resetPreviewData.isPending}><RotateCcw className="w-3.5 h-3.5" /> Reset Preview Data</Button>}
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {(generateUiPreview.error || saveBrandStyle.error) && <p role="alert" className="text-sm text-destructive">{(generateUiPreview.error || saveBrandStyle.error).message}</p>}
         {previewMode === 'app' && showBrandPanel && <BrandStylePanel design={brandStyle} onChange={setBrandStyle} onSave={() => saveBrandStyle.mutate()} saving={saveBrandStyle.isPending} />}
-        {previewMode === 'app' ? <AppPreviewCanvas pages={pages} entities={entities} designMode={designMode} designSystem={brandStyle} /> : entities.length === 0 ? (
+        <div className={previewMode === 'app' ? '' : 'hidden'}><AppPreviewCanvas key={project.id} projectId={project.id} projectName={previewName || project.name} pages={pages} entities={entities} records={records} designMode={designMode} designSystem={{ ...brandStyle, sidebar_dark: sidebarDark }} onCreate={openCreateDialog} onEdit={openEditDialog} onDelete={id => deleteRecord.mutateAsync(id)} onSave={saveRuntimeRecord} busy={createRecord.isPending || updateRecord.isPending || deleteRecord.isPending} /></div>
+        {previewMode === 'data' && (entities.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-dashed border-border rounded-xl bg-card/40">
             <Database className="w-10 h-10 text-muted-foreground/40 mb-3" />
             <h3 className="font-semibold text-foreground text-sm mb-1">No entities yet</h3>
@@ -424,16 +369,13 @@ export default function LivePreviewSection({ project }) {
               </CardContent>
             </Card>
           );
-        })}
+        }))}
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editingRecord ? 'Edit' : 'Add'} {selectedEntity?.display_name || selectedEntity?.name} Record</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
-            {selectedEntity && Object.entries(normalizeSchema(selectedEntity).properties).map(([fieldName, fieldSchema]) => <div key={fieldName} className="space-y-1.5"><Label htmlFor={fieldName} className="text-xs capitalize">{fieldName.replace(/_/g, ' ')}{normalizeSchema(selectedEntity).required.includes(fieldName) && <span className="text-destructive ml-1">*</span>}</Label>{renderField(fieldName, fieldSchema, normalizeSchema(selectedEntity).required.includes(fieldName))}</div>)}
-          </div>
-          <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button><Button onClick={handleSaveRecord} disabled={createRecord.isPending || updateRecord.isPending}>{createRecord.isPending || updateRecord.isPending ? 'Saving...' : 'Save Record'}</Button></div>
+          {selectedEntity && <RuntimeRecordForm key={`${selectedEntity.id}-${editingRecord?.id || 'new'}-${isDialogOpen}`} entity={selectedEntity} record={editingRecord} records={records} onSave={saveRuntimeRecord} onCancel={() => setIsDialogOpen(false)} />}
         </DialogContent>
       </Dialog>
 
