@@ -1,10 +1,12 @@
 import { invokeCodeAI } from '@/lib/codeAI';
 import React, { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { MonitorPlay, RefreshCw } from 'lucide-react';
+import { MonitorPlay, RefreshCw, Code2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import LivePreviewSection from '@/components/LivePreviewSection';
 import StudioChat from './studio/StudioChat';
+import SourceEditor from './studio/SourceEditor';
+import { confirmWorkspaceNavigation } from '@/hooks/useUnsavedChanges';
 import { MessageSquare, Brush } from 'lucide-react';
 
 export default function StudioSection({ project, onRefresh }) {
@@ -17,6 +19,7 @@ export default function StudioSection({ project, onRefresh }) {
   const [messages, setMessages] = useState([]);
   const [busy, setBusy] = useState(false);
   const [panel, setPanel] = useState('design');
+  const changePanel = next => { if (next !== panel && confirmWorkspaceNavigation()) setPanel(next); };
 
   useEffect(() => { loadData(); }, [project.id]);
 
@@ -197,21 +200,21 @@ Also write a short friendly reply (1-2 sentences) describing what you did.`,
   return (
     <div className="flex flex-col flex-1 overflow-hidden h-full">
       {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-card/50 flex-shrink-0">
+      <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-border bg-card/50 flex-shrink-0">
         <MonitorPlay className="w-4 h-4 text-primary" />
-        <h2 className="text-sm font-semibold text-foreground">Studio — Live Edit</h2>
+        <h2 className="text-sm font-semibold text-foreground">Builder Studio</h2>
         <span className="flex items-center gap-1 text-[10px] bg-green-500/15 text-green-700 border border-green-300 px-2 py-0.5 rounded-full font-semibold">
-          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> LIVE
+          <span className="w-1.5 h-1.5 rounded-full bg-green-500" /> PROTOTYPE
         </span>
         <div className="flex-1" />
-        <button className="text-xs text-primary border rounded-md px-3 py-1" onClick={() => setPanel(panel === 'design' ? 'chat' : 'design')}>{panel === 'design' ? 'AI Chat' : 'Visual screen editor'}</button>
+        <div role="tablist" aria-label="Studio mode" className="flex rounded-lg border border-border overflow-hidden">{[{ key: 'design', label: 'Visual editor', Icon: Brush }, { key: 'chat', label: 'AI assistant', Icon: MessageSquare }, { key: 'code', label: 'Code editor', Icon: Code2 }].map(({ key, label, Icon }) => <button key={key} role="tab" aria-selected={panel === key} onClick={() => changePanel(key)} className={'flex items-center gap-1.5 px-3 py-2 text-xs ' + (panel === key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}><Icon className="w-3 h-3" />{label}</button>)}</div>
         <button onClick={loadData} className="text-muted-foreground hover:text-foreground transition-colors" title="Refresh preview">
           <RefreshCw className="w-3.5 h-3.5" />
         </button>
       </div>
 
       {/* Split: chat | preview */}
-      <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
+      {panel === 'code' ? <div className="flex-1 min-h-0 overflow-hidden"><SourceEditor project={project} /></div> : <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
         {panel === 'chat' && <div className="w-full md:w-72 border-b md:border-b-0 md:border-r border-border flex-shrink-0 h-72 md:h-auto bg-card/30 flex flex-col">
           <div className="flex border-b border-border flex-shrink-0">
             {[
@@ -220,7 +223,7 @@ Also write a short friendly reply (1-2 sentences) describing what you did.`,
             ].map(({ key, label, icon: Icon }) => (
               <button
                 key={key}
-                onClick={() => setPanel(key)}
+                onClick={() => changePanel(key)}
                 className={`flex-1 flex items-center justify-center gap-1.5 text-[11px] py-2 transition-colors ${
                   panel === key ? 'text-primary font-semibold border-b-2 border-primary bg-primary/5' : 'text-muted-foreground hover:text-foreground'
                 }`}
@@ -236,7 +239,7 @@ Also write a short friendly reply (1-2 sentences) describing what you did.`,
         <div className="flex-1 min-w-0 overflow-hidden bg-muted/20">
           <LivePreviewSection key={project.id} project={project} initialDesignMode={panel === 'design'} previewName={design.app_name || project.name} sidebarDark={design.sidebar_dark} />
         </div>
-      </div>
+      </div>}
     </div>
   );
 }
