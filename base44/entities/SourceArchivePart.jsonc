@@ -1,0 +1,30 @@
+{
+  "name": "SourceArchivePart",
+  "type": "object",
+  "properties": {
+    "owner_id": {
+      "type": "string"
+    },
+    "group_id": {
+      "type": "string"
+    },
+    "part_index": {
+      "type": "integer"
+    },
+    "content": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "owner_id",
+    "group_id",
+    "part_index",
+    "content"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}
