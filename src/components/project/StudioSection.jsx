@@ -18,7 +18,7 @@ export default function StudioSection({ project, onRefresh }) {
   const [loading, setLoading] = useState(true);
   const [messages, setMessages] = useState([]);
   const [busy, setBusy] = useState(false);
-  const [panel, setPanel] = useState('design');
+  const [panel, setPanel] = useState(() => new URLSearchParams(window.location.search).get('mode') === 'code' ? 'code' : 'design');
   const changePanel = next => { if (next !== panel && confirmWorkspaceNavigation()) setPanel(next); };
 
   useEffect(() => { loadData(); }, [project.id]);
