@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import ImportArchiveDialog from '@/components/project/ImportArchiveDialog';
 
 const PROJECT_TYPES = [
   { value: 'erp_system', label: 'ERP System', icon: '🏭', desc: 'Manufacturing, distribution, operations' },
@@ -35,6 +36,7 @@ export default function NewProject() {
   const defaultType = searchParams.get('type') || '';
 
   const [step, setStep] = useState(1);
+  const [showImport, setShowImport] = useState(false);
   const [form, setForm] = useState({
     name: '',
     description: '',
@@ -73,6 +75,8 @@ export default function NewProject() {
           <p className="text-muted-foreground text-sm mt-2">Our AI agents will guide you through designing your application</p>
         </div>
 
+        <div className="text-center mb-6"><Button variant="outline" onClick={() => setShowImport(true)}>Import an existing app ZIP</Button></div>
+        <ImportArchiveDialog open={showImport} onClose={() => setShowImport(false)} />
         {/* Step indicator */}
         <div className="flex items-center justify-center gap-2 mb-8">
           {[1, 2].map(s => (

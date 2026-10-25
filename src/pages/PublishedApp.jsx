@@ -1,3 +1,4 @@
+import ArchiveWorkspace from '@/components/project/ArchiveWorkspace';
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
@@ -162,6 +163,8 @@ export default function PublishedApp() {
     }
     setUploadingDrive(false);
   };
+
+  if (project?.source_mode === 'archive') return <div className="h-screen flex flex-col"><div className="p-3 border-b"><Button variant="ghost" onClick={() => navigate('/projects/' + id)}>Back to project</Button></div><ArchiveWorkspace project={project} /></div>;
 
   if (loading) {
     return (

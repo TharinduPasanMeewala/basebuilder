@@ -1,3 +1,4 @@
+import ArchiveWorkspace from '@/components/project/ArchiveWorkspace';
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -55,7 +56,8 @@ export default function ProjectWorkspace() {
   const navigate = useNavigate();
   const [project, setProject] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeSection = SECTIONS.some(item => item.key === searchParams.get('section')) ? searchParams.get('section') : 'studio';
+  const availableSections = project?.source_mode === 'archive' ? SECTIONS.filter(section => ['studio', 'deploy'].includes(section.key)) : SECTIONS;
+  const activeSection = availableSections.some(item => item.key === searchParams.get('section')) ? searchParams.get('section') : 'studio';
   const setActiveSection = section => {
     if (section === activeSection || !confirmWorkspaceNavigation()) return;
     const next = new URLSearchParams(searchParams); next.set('section', section); setSearchParams(next);
@@ -173,21 +175,21 @@ export default function ProjectWorkspace() {
               size="sm"
               variant="outline"
               className="h-7 text-xs gap-1.5"
-              onClick={() => setActiveSection('blueprint')}
+              onClick={() => setActiveSection(project.source_mode === 'archive' ? 'studio' : 'blueprint')}
             >
               <Sparkles className="w-3.5 h-3.5" />
-              Generate
+              {project.source_mode === 'archive' ? 'Edit source' : 'Generate'}
             </Button>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3 mb-3"><AIModelPicker /><span className="text-[11px] text-muted-foreground">One model connection across your builder tools</span></div>
         {/* Phase stepper */}
-        <PhasesStepper currentPhase={project.phase} onPhaseClick={phase => setActiveSection(({ discovery: 'chat', analysis: 'requirements', design: 'studio', architecture: 'blueprint', review: 'roundtable', generation: 'publish', completed: 'publish' })[phase] || 'studio')} />
+        {project.source_mode !== 'archive' && <PhasesStepper currentPhase={project.phase} onPhaseClick={phase => setActiveSection(({ discovery: 'chat', analysis: 'requirements', design: 'studio', architecture: 'blueprint', review: 'roundtable', generation: 'publish', completed: 'publish' })[phase] || 'studio')} />}
       </div>
 
       <div className="flex flex-col lg:flex-row flex-1 overflow-hidden min-h-0">
         <nav aria-label="Builder sections" className="hidden lg:flex flex-col w-44 border-r border-border bg-card/50 flex-shrink-0 py-3 px-2 gap-0.5 overflow-y-auto">
-          {SECTIONS.map(({ key, label, icon: Icon }) => <button key={key} aria-current={activeSection === key ? 'page' : undefined} onClick={() => setActiveSection(key)}
+          {availableSections.map(({ key, label, icon: Icon }) => <button key={key} aria-current={activeSection === key ? 'page' : undefined} onClick={() => setActiveSection(key)}
             className={'flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors ' + (activeSection === key ? 'bg-primary text-primary-foreground font-semibold' : 'text-muted-foreground hover:text-foreground hover:bg-muted')}>
             <span className="flex items-center gap-2"><Icon className="w-3.5 h-3.5 shrink-0" />{label}</span>
             {counts[key] > 0 && <span className="text-[10px] rounded-full px-1.5 py-0.5 bg-background/15">{counts[key]}</span>}
@@ -196,7 +198,7 @@ export default function ProjectWorkspace() {
         <div className="lg:hidden border-b border-border bg-card p-2 flex gap-3 items-center">
           <label htmlFor="workspace-section" className="text-xs text-muted-foreground shrink-0">Workspace</label>
           <select id="workspace-section" className="w-full rounded-lg bg-background border border-border p-2 text-sm" value={activeSection} onChange={event => setActiveSection(event.target.value)}>
-            {SECTIONS.map(section => <option key={section.key} value={section.key}>{section.label}{counts[section.key] ? ' (' + counts[section.key] + ')' : ''}</option>)}
+            {availableSections.map(section => <option key={section.key} value={section.key}>{section.label}{counts[section.key] ? ' (' + counts[section.key] + ')' : ''}</option>)}
           </select>
         </div>
         <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">
@@ -208,6 +210,7 @@ export default function ProjectWorkspace() {
 }
 
 function SectionContent({ section, project, onRefresh }) {
+  if (project.source_mode === 'archive') return <ArchiveWorkspace project={project} mode={section === 'deploy' ? 'hosting' : 'editor'} />;
   switch (section) {
     case 'chat': return <ChatSection project={project} onRefresh={onRefresh} />;
     case 'requirements': return <RequirementsSection project={project} onRefresh={onRefresh} />;

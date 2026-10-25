@@ -19,7 +19,7 @@ export default function StudioSection({ project, onRefresh }) {
   const [loadError, setLoadError] = useState('');
   const [messages, setMessages] = useState([]);
   const [busy, setBusy] = useState(false);
-  const [panel, setPanel] = useState(() => new URLSearchParams(window.location.search).get('mode') === 'code' ? 'code' : 'design');
+  const [panel, setPanel] = useState(() => project.source_mode === 'archive' || new URLSearchParams(window.location.search).get('mode') === 'code' ? 'code' : 'design');
   const changePanel = next => { if (next !== panel && confirmWorkspaceNavigation()) setPanel(next); };
 
   useEffect(() => { loadData(); }, [project.id]);
@@ -212,7 +212,7 @@ Also write a short friendly reply (1-2 sentences) describing what you did.`,
           <span className="w-1.5 h-1.5 rounded-full bg-green-500" /> PROTOTYPE
         </span>
         <div className="flex-1" />
-        <div role="tablist" aria-label="Studio mode" className="flex rounded-lg border border-border overflow-hidden">{[{ key: 'design', label: 'Visual editor', Icon: Brush }, { key: 'chat', label: 'AI assistant', Icon: MessageSquare }, { key: 'code', label: 'Code editor', Icon: Code2 }].map(({ key, label, Icon }) => <button key={key} role="tab" aria-selected={panel === key} onClick={() => changePanel(key)} className={'flex items-center gap-1.5 px-3 py-2 text-xs ' + (panel === key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}><Icon className="w-3 h-3" />{label}</button>)}</div>
+        <div role="tablist" aria-label="Studio mode" className="flex rounded-lg border border-border overflow-hidden">{[{ key: 'design', label: 'Visual editor', Icon: Brush }, { key: 'chat', label: 'AI assistant', Icon: MessageSquare }, { key: 'code', label: 'Code editor', Icon: Code2 }].map(({ key, label, Icon }) => <button key={key} role="tab" aria-selected={panel === key} disabled={project.source_mode === 'archive' && key !== 'code'} title={project.source_mode === 'archive' && key !== 'code' ? 'Imported applications use their original source UI. Edit files here and run the app locally to preview.' : undefined} onClick={() => changePanel(key)} className={'flex items-center gap-1.5 px-3 py-2 text-xs ' + (panel === key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}><Icon className="w-3 h-3" />{label}</button>)}</div>
         <button onClick={loadData} className="text-muted-foreground hover:text-foreground transition-colors" title="Refresh preview">
           <RefreshCw className="w-3.5 h-3.5" />
         </button>

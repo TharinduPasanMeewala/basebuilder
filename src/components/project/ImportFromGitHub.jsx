@@ -41,13 +41,13 @@ export default function ImportFromGitHub({ open, onClose }) {
     ].filter(Boolean).join('\n');
 
     try {
-      const res = await base44.functions.invoke('cloneFromGitHub', {
-        repoUrl: repoUrl.trim(),
-        projectName: repoData.name,
-        projectDescription: description.slice(0, 1000),
+      const res = await base44.functions.invoke('source-archive', {
+        action: 'github',
+        repo_url: repoUrl.trim(),
+        project_name: repoData.name,
       });
       if (res.data?.error) throw new Error(res.data.error);
-      navigate(`/projects/${res.data.projectId}`);
+      navigate(`/projects/${res.data.projectId}?section=studio&mode=code`);
     } catch (e) {
       setError(e.response?.data?.error || e.message || 'Failed to clone repository');
       setCreating(false);
@@ -72,7 +72,7 @@ export default function ImportFromGitHub({ open, onClose }) {
 
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Enter a public GitHub repository URL to analyze it and create a project based on its structure.
+            Enter a public GitHub repository URL to analyze it and import its complete source, including backend files and binary assets.
           </p>
 
           <div className="flex gap-2">

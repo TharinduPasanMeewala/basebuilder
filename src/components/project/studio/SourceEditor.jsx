@@ -1,3 +1,4 @@
+import ArchiveWorkspace from '@/components/project/ArchiveWorkspace';
 import React, { useEffect, useRef, useState } from 'react';
 import { Search, FileCode, Save, Plus, Loader2, RotateCcw, Package, CheckCircle2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
@@ -7,7 +8,7 @@ import { generateCodeFiles } from '@/lib/codegen';
 import { filesFromCode, codeFromFiles, safeSourcePath } from '@/lib/hosting';
 import useUnsavedChanges from '@/hooks/useUnsavedChanges';
 
-export default function SourceEditor({ project }) {
+function GeneratedSourceEditor({ project }) {
   const [record, setRecord] = useState(null);
   const [files, setFiles] = useState([]);
   const [saved, setSaved] = useState('[]');
@@ -102,3 +103,5 @@ export default function SourceEditor({ project }) {
     </div>}
   </div>;
 }
+
+export default function SourceEditor(props) { return props.project.source_mode === 'archive' ? <ArchiveWorkspace {...props} /> : <GeneratedSourceEditor {...props} />; }

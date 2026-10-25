@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, FolderOpen, Globe } from 'lucide-react';
+import { Plus, Search, FolderOpen, Globe, Upload } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/select';
 import ProjectCard from '@/components/project/ProjectCard';
 import CloneWebsiteDialog from '@/components/project/CloneWebsiteDialog';
+import ImportArchiveDialog from '@/components/project/ImportArchiveDialog';
 
 const PHASES = ['all', 'discovery', 'analysis', 'design', 'architecture', 'review', 'generation', 'completed'];
 const TYPES = [
@@ -31,6 +32,7 @@ export default function Projects() {
   const [phaseFilter, setPhaseFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [showWebsiteClone, setShowWebsiteClone] = useState(false);
+  const [showArchiveImport, setShowArchiveImport] = useState(false);
 
   useEffect(() => {
     loadProjects();
@@ -52,12 +54,13 @@ export default function Projects() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight">Projects</h1>
           <p className="text-muted-foreground text-sm mt-1">{projects.length} project{projects.length !== 1 ? 's' : ''}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={() => setShowArchiveImport(true)} className="gap-2"><Upload className="w-4 h-4" />Import app ZIP</Button>
           <Button variant="outline" onClick={() => setShowWebsiteClone(true)} className="gap-2">
             <Globe className="w-4 h-4" />
             Clone Website
@@ -128,6 +131,7 @@ export default function Projects() {
           ))}
         </div>
       )}
+      <ImportArchiveDialog open={showArchiveImport} onClose={() => setShowArchiveImport(false)} />
       <CloneWebsiteDialog open={showWebsiteClone} onClose={() => setShowWebsiteClone(false)} />
     </div>
   );
