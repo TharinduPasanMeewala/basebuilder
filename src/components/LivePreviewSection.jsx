@@ -1,4 +1,5 @@
 import { invokeCodeAI } from '@/lib/codeAI';
+import useUnsavedChanges from '@/hooks/useUnsavedChanges';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, RefreshCw, Trash2, Pencil, Database, RotateCcw, MousePointerClick, Sparkles } from 'lucide-react';
@@ -143,6 +144,9 @@ export default function LivePreviewSection({ project, initialDesignMode = false,
   const records = recordsQuery.data || [];
   const pages = pagesQuery.data || [];
   const savedDesign = designQuery.data;
+  const brandDirty = Object.keys(DEFAULT_BRAND_STYLE).some(key => brandStyle[key] !== ({ ...DEFAULT_BRAND_STYLE, ...(savedDesign || {}) })[key]);
+  useUnsavedChanges(brandDirty);
+
   const isLoading = entitiesQuery.isLoading || dataEntitiesQuery.isLoading || recordsQuery.isLoading || pagesQuery.isLoading || designQuery.isLoading;
 
   useEffect(() => {

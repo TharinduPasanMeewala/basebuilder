@@ -5,11 +5,13 @@ export function confirmWorkspaceNavigation() {
 export default function useUnsavedChanges(dirty) {
   useEffect(() => {
     if (!dirty) return;
-    const confirm = event => { if (!window.confirm('You have unsaved edits. Leave this editor and discard them?')) event.preventDefault(); };
+    const confirm = event => { if (event.architectConfirmed) return; event.architectConfirmed = true; if (!window.confirm('You have unsaved edits. Leave this editor and discard them?')) event.preventDefault(); };
     const unload = event => { event.preventDefault(); event.returnValue = ''; };
     const link = event => {
       const anchor = event.target.closest?.('a[href]');
       if (!anchor || anchor.download || anchor.target === '_blank' || anchor.getAttribute('href')?.startsWith('#')) return;
+      if (event.architectConfirmed) return;
+      event.architectConfirmed = true;
       if (!window.confirm('You have unsaved edits. Leave this editor and discard them?')) { event.preventDefault(); event.stopPropagation(); }
     };
     window.addEventListener('architect:beforeNavigate', confirm);

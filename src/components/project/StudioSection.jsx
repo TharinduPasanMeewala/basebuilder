@@ -16,6 +16,7 @@ export default function StudioSection({ project, onRefresh }) {
   const [design, setDesign] = useState({ app_name: '', primary: '#2563eb', sidebar_dark: true });
   const [designVersionId, setDesignVersionId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [messages, setMessages] = useState([]);
   const [busy, setBusy] = useState(false);
   const [panel, setPanel] = useState(() => new URLSearchParams(window.location.search).get('mode') === 'code' ? 'code' : 'design');
@@ -24,6 +25,8 @@ export default function StudioSection({ project, onRefresh }) {
   useEffect(() => { loadData(); }, [project.id]);
 
   const loadData = async () => {
+    setLoadError('');
+    try {
     const [ents, pgs, designs] = await Promise.all([
       base44.entities.DataEntity.filter({ project_id: project.id }),
       base44.entities.PageSpec.filter({ project_id: project.id }),
@@ -35,7 +38,8 @@ export default function StudioSection({ project, onRefresh }) {
       setDesign(d => ({ ...d, ...designs[0].snapshot }));
       setDesignVersionId(designs[0].id);
     }
-    setLoading(false);
+    } catch (error) { setLoadError(error.message || 'Could not load the studio.'); }
+    finally { setLoading(false); }
   };
 
   const persistDesign = async (newDesign) => {
@@ -193,6 +197,7 @@ Also write a short friendly reply (1-2 sentences) describing what you did.`,
   };
 
 
+  if (loadError) return <div role="alert" className="p-6 text-sm text-destructive">{loadError}<button className="ml-3 underline" onClick={loadData}>Retry</button></div>;
   if (loading) {
     return <div className="flex items-center justify-center flex-1"><div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" /></div>;
   }
