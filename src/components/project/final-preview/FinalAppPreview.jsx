@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Image, Loader2, Send, Sparkles } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
-import { invokeCodeAI, getUserAIPreference } from '@/lib/codeAI';
-import { Switch } from '@/components/ui/switch';
+import { invokeCodeAI } from '@/lib/codeAI';
 import CalculatorFinalPreview from './CalculatorFinalPreview';
 import GenericFinalPreview from './GenericFinalPreview';
 
@@ -20,7 +19,6 @@ export default function FinalAppPreview({ project, publishState, onSaved }) {
   const [input, setInput] = useState('');
   const [files, setFiles] = useState([]);
   const [working, setWorking] = useState(false);
-  const [useCustomOpenAI, setUseCustomOpenAI] = useState(false);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -28,26 +26,31 @@ export default function FinalAppPreview({ project, publishState, onSaved }) {
     setTheme({ ...defaultTheme, ...(publishState?.preview_theme || {}) });
   }, [publishState]);
 
-  useEffect(() => {
-    getUserAIPreference().then(p => setUseCustomOpenAI(p.useCustomOpenAI));
-  }, []);
-
   const uploadFiles = async (selectedFiles) => {
     const incoming = Array.from(selectedFiles || []);
     if (!incoming.length) return;
     setWorking(true);
-    const uploaded = [];
-    for (const file of incoming) {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
-      uploaded.push({ name: file.name, url: file_url });
+    try {
+      if (files.length + incoming.length > 6) throw new Error('Attach at most six images.');
+      const uploaded = [];
+      for (const file of incoming) {
+        if (!file.type.startsWith('image/')) throw new Error('Choose image files for design references.');
+        const { file_url } = await base44.integrations.Core.UploadFile({ file });
+        uploaded.push({ name: file.name, url: file_url });
+      }
+      setFiles(previous => [...previous, ...uploaded]);
+      setMessages(previous => [...previous, { role: 'user', content: 'Uploaded ' + uploaded.map(file => file.name).join(', ') }]);
+    } catch (error) {
+      setMessages(previous => [...previous, { role: 'assistant', content: 'Image upload failed: ' + error.message }]);
+    } finally {
+      setWorking(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
-    setFiles(prev => [...prev, ...uploaded]);
-    setMessages(prev => [...prev, { role: 'user', content: `Uploaded ${uploaded.map(f => f.name).join(', ')}` }]);
-    setWorking(false);
   };
 
   const persistCode = async (nextState) => {
     const versions = await base44.entities.ProjectVersion.filter({ project_id: project.id, label: 'publish_state' }, '-created_date', 1);
+    if (versions[0] && JSON.stringify(versions[0].snapshot?.code) !== JSON.stringify(localState?.code)) throw new Error('The source changed in another editor. Refresh this preview before applying another change.');
     if (versions[0]) {
       await base44.entities.ProjectVersion.update(versions[0].id, { snapshot: nextState, notes: 'Published App - AI refined' });
     } else {
@@ -71,7 +74,7 @@ export default function FinalAppPreview({ project, publishState, onSaved }) {
     setMessages(prev => [...prev, { role: 'user', content: userText }]);
 
     try {
-      const result = await invokeCodeAI({ useCustom: useCustomOpenAI,
+      const result = await invokeCodeAI({
       prompt: `You are refining a generated app preview and its React code from a user design request.
 App: ${project.name}
 Description: ${project.description || ''}
@@ -97,13 +100,13 @@ Return a practical visual refinement. If you update code, preserve all existing 
     });
 
       const nextTheme = { ...theme, ...(result.preview_theme || {}) };
-      setTheme(nextTheme);
       let nextState = { ...localState, preview_theme: nextTheme };
       if (result.updated_app_jsx && result.updated_app_jsx.includes('export default')) {
         nextState = { ...nextState, code: { ...nextState.code, '🎨 src': { ...nextState.code['🎨 src'], 'App.jsx': result.updated_app_jsx } } };
       }
-      setLocalState(nextState);
       await persistCode(nextState);
+      setLocalState(nextState);
+      setTheme(nextTheme);
       setMessages(prev => [...prev, { role: 'assistant', content: `${result.summary || 'I refined the preview design and updated the generated app code where applicable.'}\n\nSaved to the generated code package.` }]);
       setFiles([]);
     } catch (e) {
@@ -115,7 +118,7 @@ Return a practical visual refinement. If you update code, preserve all existing 
 
   return <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-4">
     <div className="rounded-xl border border-border bg-card overflow-hidden">
-      <div className="px-4 py-3 border-b border-border bg-muted/20"><p className="text-xs font-semibold text-foreground">Wrapped Final App Preview</p><p className="text-[11px] text-muted-foreground">Use the app buttons below, or refine it with the AI editor.</p></div>
+      <div className="px-4 py-3 border-b border-border bg-muted/20"><p className="text-xs font-semibold text-foreground">Interactive design prototype</p><p className="text-[11px] text-muted-foreground">Explore this design prototype. Download the code package to check source changes in the generated app.</p></div>
       {isCalculator(project, localState) ? <CalculatorFinalPreview title={project?.name || 'Calculator'} theme={theme} /> : <GenericFinalPreview project={project} publishState={localState} theme={theme} />}
     </div>
 
@@ -130,7 +133,7 @@ Return a practical visual refinement. If you update code, preserve all existing 
         <div className="flex gap-2">
           <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={e => uploadFiles(e.target.files)} />
           <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer">
-            <Switch checked={useCustomOpenAI} onCheckedChange={setUseCustomOpenAI} /> OpenAI
+            Uses your selected builder model
           </label>
           <button onClick={() => fileInputRef.current?.click()} disabled={working} className="h-8 px-3 rounded-md border border-border text-xs flex items-center gap-1.5 hover:bg-muted"><Image className="w-3.5 h-3.5" /> Image</button>
           <button onClick={sendMessage} disabled={working || (!input.trim() && files.length === 0)} className="h-8 px-3 rounded-md bg-primary text-primary-foreground text-xs flex items-center gap-1.5 ml-auto disabled:opacity-50">{working ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} Apply</button>
