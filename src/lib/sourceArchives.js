@@ -1,6 +1,7 @@
 import JSZip from 'jszip';
 import { base44 } from '@/api/base44Client';
 import { analyzeSource, convertStandalone, isTextPath, safeArchivePath, excludedSourcePath } from '@/lib/standaloneConversion';
+import { mirrorPublicAssets } from '@/lib/sourceAssets';
 
 export async function archiveCall(action, data = {}) {
   try {
@@ -8,6 +9,13 @@ export async function archiveCall(action, data = {}) {
     if (response.data?.error) throw new Error(response.data.error);
     return response.data;
   } catch (error) { throw new Error(error.response?.data?.error || error.message || 'Source archive request failed.'); }
+}
+async function boundedEntry(entry) {
+  return new Promise((resolve,reject)=>{
+    const chunks=[];let size=0,stopped=false;const stream=entry.internalStream('uint8array');
+    stream.on('data',chunk=>{if(stopped)return;size+=chunk.length;if(size>12*1024*1024){stopped=true;stream.pause();reject(new Error('An expanded file exceeds 12 MB.'));return;}chunks.push(chunk);});
+    stream.on('error',reject);stream.on('end',()=>{if(stopped)return;const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}resolve(bytes);});stream.resume();
+  });
 }
 export async function inspectArchive(file) {
   if (!file || file.size > 15 * 1024 * 1024) throw new Error('Choose a ZIP file smaller than 15 MB.');
@@ -19,13 +27,15 @@ export async function inspectArchive(file) {
   }
   const packagePaths = entries.filter(entry => /(^|\/)package\.json$/.test(entry.name) && !excludedSourcePath(entry.name)).map(entry => entry.name).sort((a,b) => a.split('/').length - b.split('/').length);
   if (!packagePaths.length) throw new Error('No package.json was found. Upload the application’s source ZIP.');
+  if (packagePaths.filter(path=>path.split('/').length===packagePaths[0].split('/').length).length>1) throw new Error('This ZIP contains multiple application roots. ZIP one complete application root at a time.');
   const root = packagePaths[0].replace(/package\.json$/, '');
+  if (entries.some(entry=>!entry.name.startsWith(root)&&!excludedSourcePath(entry.name))) throw new Error('The ZIP has source files outside the detected application root. Place all app files under one root before importing.');
   const selected = entries.filter(entry => entry.name.startsWith(root) && !excludedSourcePath(entry.name.slice(root.length)));
   const declared = selected.reduce((sum, entry) => sum + Number(entry._data?.uncompressedSize || 0), 0);
   if (declared > 80 * 1024 * 1024 || selected.some(entry => Number(entry._data?.uncompressedSize || 0) > 12 * 1024 * 1024)) throw new Error('Expanded source exceeds the import limits (80 MB total, 12 MB per file).');
-  const files = [], clean = new JSZip();
+  const files = [], clean = new JSZip();let expanded=0;
   for (const entry of selected) {
-    const path = entry.name.slice(root.length), bytes = await entry.async('uint8array');
+    const path = entry.name.slice(root.length), bytes = await boundedEntry(entry);expanded+=bytes.length;if(expanded>80*1024*1024)throw new Error('Expanded source exceeds 80 MB.');
     clean.file(path, bytes);
     files.push({ path, content: isTextPath(path) ? new TextDecoder().decode(bytes) : bytes });
   }
@@ -42,7 +52,7 @@ export async function uploadArchive(inspected, name, progress = () => {}) {
   const { archive_id } = await archiveCall('begin', { project_name: name, filename: inspected.originalName, sha256: digest, compressed_bytes: bytes.length, part_count: parts.length });
   for (let i=0;i<parts.length;i+=32) {
     await archiveCall('parts', { archive_id, parts: parts.slice(i,i+32) });
-    progress('Saving source files and binary assets…', 10 + Math.round(((i+32)/parts.length)*70));
+    progress('Saving source files and binary assets…', 10 + Math.round((Math.min(i+32,parts.length)/parts.length)*70));
   }
   progress('Verifying checksum and creating project…', 90);
   const result = await archiveCall('finalize', { archive_id }); progress('Import complete', 100); return result;
@@ -66,7 +76,10 @@ export async function standaloneArchive(project, domain, progress = () => {}) {
     files.push({ path: entry.name, content: isTextPath(entry.name) ? new TextDecoder().decode(bytes) : bytes });
   }
   progress('Converting backend functions and adding an independent runtime…');
-  const converted = convertStandalone(files, await templates(), { name:project.name, domain:domain||undefined, publicUrl:domain ? 'https://'+domain : undefined });
+  const mirrored=await mirrorPublicAssets(files,progress);
+  const converted = convertStandalone(mirrored.files, await templates(), { name:project.name, domain:domain||undefined, publicUrl:domain ? 'https://'+domain : undefined,assetMap:mirrored.assetMap });
+  if(mirrored.missing.length){converted.report.missing_public_assets=mirrored.missing;converted.report.configuration_required.push('Some referenced public assets could not be copied. Migrate the listed assets manually.');}
+  const reportFile=converted.files.find(file=>file.path==='migration/report.json');if(reportFile)reportFile.content=JSON.stringify(converted.report,null,2);
   const output = new JSZip();
   for (const file of converted.files) output.file(file.path,file.content);
   progress('Preparing standalone ZIP…');
