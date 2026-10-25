@@ -96,7 +96,7 @@ export function applySourceEdits(source, edits) {
     if (typeof edit.old_text !== 'string' || !edit.old_text || typeof edit.new_text !== 'string') throw new Error('AI edits must contain exact old and new text.');
     const count = next.split(edit.old_text).length - 1;
     if (!count || count > 1 && !edit.replace_all) throw new Error('An AI edit did not match one unique location. No draft changes were applied.');
-    next = edit.replace_all ? next.split(edit.old_text).join(edit.new_text) : next.replace(edit.old_text, edit.new_text);
+    next = edit.replace_all ? next.split(edit.old_text).join(edit.new_text) : next.replace(edit.old_text, () => edit.new_text);
   }
   return next;
 }
