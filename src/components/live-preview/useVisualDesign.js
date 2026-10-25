@@ -1,34 +1,30 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useReducer } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { initialHistory, visualHistory } from '@/lib/visualHistory';
+import useUnsavedChanges from '@/hooks/useUnsavedChanges';
 
 export default function useVisualDesign(projectId) {
   const client = useQueryClient();
   const key = ['visualLayout', projectId];
   const query = useQuery({ queryKey: key, queryFn: async () => (await base44.entities.ProjectVersion.filter({ project_id: projectId, label: 'visual_layout' }, '-updated_date', 1))[0] || null, enabled: !!projectId });
-  const [settings, setSettings] = useState({});
-  const [history, setHistory] = useState([]);
-  const [dirty, setDirty] = useState(false);
-  useEffect(() => { if (!dirty) setSettings(query.data?.snapshot?.elements || {}); }, [query.data, dirty]);
-  const change = (id, value) => {
-    setHistory(previous => [...previous.slice(-29), settings]);
-    setSettings(previous => { const next = { ...previous }; if (value === null) delete next[id]; else next[id] = value; return next; });
-    setDirty(true);
-  };
-  const undo = () => { if (!history.length) return; setSettings(history[history.length - 1]); setHistory(previous => previous.slice(0, -1)); setDirty(true); };
+  const [state, dispatch] = useReducer(visualHistory, initialHistory);
+  useEffect(() => { if (query.isSuccess) dispatch({ type: 'load', elements: query.data?.snapshot?.elements || {} }); }, [query.isSuccess, query.data]);
+  const dirty = JSON.stringify(state.present) !== state.saved;
+  useUnsavedChanges(dirty);
   const save = useMutation({
-    mutationFn: async () => {
-      const snapshot = { elements: settings };
-      return query.data?.id
-        ? base44.entities.ProjectVersion.update(query.data.id, { snapshot })
-        : base44.entities.ProjectVersion.create({ project_id: projectId, label: 'visual_layout', version_number: 1, notes: 'Preview element styles and screen data bindings', snapshot });
+    mutationFn: async elements => {
+      const current = (await base44.entities.ProjectVersion.filter({ project_id: projectId, label: 'visual_layout' }, '-updated_date', 1))[0];
+      if ((current?.updated_date || '') !== (query.data?.updated_date || '')) throw new Error('This design changed in another session. Keep your edits here and reload the saved version before continuing.');
+      const snapshot = { elements };
+      return current?.id ? base44.entities.ProjectVersion.update(current.id, { snapshot })
+        : base44.entities.ProjectVersion.create({ project_id: projectId, label: 'visual_layout', version_number: 1, notes: 'Preview styles and screen data bindings', snapshot });
     },
-    onSuccess: record => { client.setQueryData(key, record); setDirty(false); setHistory([]); },
+    onSuccess: (record, elements) => { client.setQueryData(key, record); dispatch({ type: 'saved', elements }); },
   });
-  useEffect(() => {
-    const warn = event => { if (dirty) { event.preventDefault(); event.returnValue = ''; } };
-    window.addEventListener('beforeunload', warn);
-    return () => window.removeEventListener('beforeunload', warn);
-  }, [dirty]);
-  return { settings, change, undo, canUndo: history.length > 0, dirty, save, loading: query.isLoading, error: query.error };
+  return { settings: state.present, change: (id, value) => dispatch({ type: 'change', id, value }),
+    undo: () => dispatch({ type: 'undo' }), redo: () => dispatch({ type: 'redo' }),
+    reset: () => dispatch({ type: 'reset' }), canUndo: !!state.past.length, canRedo: !!state.future.length,
+    dirty, save: { ...save, mutate: () => save.mutate(structuredClone(state.present)) },
+    loading: query.isLoading || (!state.hydrated && !query.error), error: query.error };
 }
