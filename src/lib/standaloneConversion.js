@@ -81,7 +81,7 @@ export function convertStandalone(sourceFiles, templates, options = {}) {
       if (source.functions.includes(path) && /\bDeno\.serve\s*\(/.test(next)) {
         next = next.replace(/\bDeno\.serve\s*\(/, 'export default ('); report.converted_functions.push(path);
       }
-      next = next.replace(/(["'])https:\/\/sara-global-s4(?:-copy)?\.base44\.app([^"']*)\1/g, (_, quote, suffix) => '(process.env.APP_URL + ' + JSON.stringify(suffix) + ')');
+      next = next.replace(/(["'])https:\/\/(?:sara-global-s4(?:-copy)?\.base44\.app|s4\.saraglobal\.lk)([^"']*)\1/g, (_, quote, suffix) => '(process.env.APP_URL + ' + JSON.stringify(suffix) + ')');
       next = next.replace(/(['"])https:\/\/app\.base44\.com\1/g, "'http://localhost:3000'");
       if (path === 'base44/functions/syncEmployees/entry.ts') {
         next = next.replace(/(['"])https:\/\/base44\.app\/api\/apps\/[^/]+\/entities\/Employee\1/g, "(process.env.EMPLOYEE_SOURCE_URL || '')");
@@ -100,9 +100,22 @@ export function convertStandalone(sourceFiles, templates, options = {}) {
     }
     // Application-owned callback examples become relative URLs in browser source.
     if (path.startsWith('src/') || path.startsWith('browser-extension/') || path.startsWith('canva-app/')) {
-      next = next.replace(/https:\/\/sara-global-s4(?:-copy)?\.base44\.app(?=\/)/g, options.publicUrl || 'http://localhost:3000');
+      if (path.startsWith('src/') && !path.startsWith('src/canva-app/')) {
+        next = next.replace(/https:\/\/(?:sara-global-s4(?:-copy)?\.base44\.app|s4\.saraglobal\.lk)\/login(?:\?[^"'\s`]*)?/gi, '/standalone-login');
+        next = next.replace(/https:\/\/(?:sara-global-s4(?:-copy)?\.base44\.app|s4\.saraglobal\.lk)(?=\/)/g, '');
+      } else next = next.replace(/https:\/\/(?:sara-global-s4(?:-copy)?\.base44\.app|s4\.saraglobal\.lk)(?=\/)/g, options.publicUrl || 'http://localhost:3000');
+    }
+    for (const [url, local] of Object.entries(options.assetMap || {})) {
+      if (path.startsWith('base44/')) next = next.split(JSON.stringify(url)).join('(process.env.APP_URL + ' + JSON.stringify(local) + ')').split("'" + url + "'").join('(process.env.APP_URL + ' + JSON.stringify(local) + ')');
+      else next = next.split(url).join(local);
     }
     files.set(path, next);
+  }
+  for (const [path,content] of files) if (path.startsWith('browser-extension/') && path.endsWith('/manifest.json') && typeof content === 'string') {
+    const manifest = JSON.parse(content), target = new URL(options.publicUrl || 'http://localhost:3000'), pattern = target.protocol + '//' + target.hostname + '/*';
+    manifest.host_permissions = [...new Set([...(manifest.host_permissions || []).filter(value => !value.includes('base44.app') && !value.includes('s4.saraglobal.lk')),pattern])];
+    for (const script of manifest.content_scripts || []) if (script.js?.some(value => value.includes('content-s4'))) script.matches = [pattern];
+    files.set(path,JSON.stringify(manifest,null,2));
   }
   for (const file of templates) files.set(file.path, file.content);
   files.set('migration/original-package.json', originalPackage);
