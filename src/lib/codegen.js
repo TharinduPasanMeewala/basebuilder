@@ -1,3 +1,5 @@
+import { withHostingFiles } from '@/lib/hosting';
+
 // Deterministic code generator: builds a deployable Vite + React + Tailwind app
 // from a project snapshot. It prefers working product-specific screens over stubs.
 
@@ -6,7 +8,8 @@ function slugify(name) {
 }
 
 function componentName(name) {
-  return (name || 'Page').replace(/[^a-zA-Z0-9]/g, '') || 'Page';
+  const value = (name || 'Page').replace(/[^a-zA-Z0-9]/g, '') || 'Page';
+  return /^[A-Za-z]/.test(value) ? value : 'Page' + value;
 }
 
 function escapeText(value) {
@@ -294,7 +297,7 @@ export default function ${name}Page() {
 }`;
 }
 
-export function generateCodeFiles(project, snapshot = {}) {
+function generateRawCodeFiles(project, snapshot = {}) {
   if (isCalculatorApp(project, snapshot)) return buildCalculatorFiles(project, snapshot);
 
   const entities = (snapshot.entities || []).slice(0, 8);
@@ -328,4 +331,8 @@ export function generateCodeFiles(project, snapshot = {}) {
 
   pageFiles.filter(p => p.entity).forEach(p => files.push({ path: `src/pages/${p.compName}.jsx`, content: buildEntityPage(p.entity) }));
   return files;
+}
+
+export function generateCodeFiles(project, snapshot = {}) {
+  return withHostingFiles(generateRawCodeFiles(project, snapshot), project);
 }
