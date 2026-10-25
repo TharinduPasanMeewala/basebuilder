@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Copy, Check, ChevronDown, ChevronUp, Image, Link } from 'lucide-react';
+import { Copy, Check, ChevronDown, ChevronUp, Link } from 'lucide-react';
 import AgentBadge, { getAgent } from './AgentBadge';
 
 function CodeBlock({ code, language }) {

@@ -1,6 +1,6 @@
 import { invokeCodeAI } from '@/lib/codeAI';
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Sparkles, FileText, Users, ChevronDown, Image, Link, X, Paperclip } from 'lucide-react';
+import { Send, Sparkles, FileText, Users, ChevronDown, Image, Link, X } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';

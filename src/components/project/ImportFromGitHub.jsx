@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Github, ArrowRight, Loader2, AlertCircle, Star, FileCode, X } from 'lucide-react';
+import { Github, ArrowRight, Loader2, AlertCircle, Star, FileCode } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

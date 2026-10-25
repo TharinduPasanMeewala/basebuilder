@@ -1,7 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageSquare, Calendar, Layers, ArrowRight, MoreHorizontal, Archive, Package } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Calendar, MoreHorizontal, Archive, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger

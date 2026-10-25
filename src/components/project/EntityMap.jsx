@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { X, Link, Plus, Trash2, Check, Pencil } from 'lucide-react';
+import { X, Link, Plus, Trash2, Check } from 'lucide-react';
 
 const MODULE_COLORS = [
   { bg: '#6366f1', light: '#eef2ff', border: '#a5b4fc' },

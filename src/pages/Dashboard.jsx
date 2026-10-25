@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Sparkles, TrendingUp, FolderOpen, CheckCircle, Clock, ArrowRight, Zap, Github, Globe } from 'lucide-react';
+import { Plus, Sparkles, FolderOpen, CheckCircle, Clock, ArrowRight, Zap, Github, Globe } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import ProjectCard from '@/components/project/ProjectCard';

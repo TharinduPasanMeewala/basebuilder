@@ -2,12 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, MessageSquare, FileText, Database, Layout,
-  GitBranch, Code, Sparkles, ChevronRight, Users, Rocket, Globe, Zap, Package, Eye, History, MonitorPlay
+  GitBranch, Code, Sparkles, Users, Rocket, Globe, Zap, Package, Eye, History, MonitorPlay
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
 import PhasesStepper from '@/components/project/PhasesStepper';
 import ChatSection from '@/components/project/ChatSection';
 import RequirementsSection from '@/components/project/RequirementsSection';

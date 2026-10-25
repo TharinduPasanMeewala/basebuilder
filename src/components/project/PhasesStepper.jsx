@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Circle, Lock } from 'lucide-react';
+import { Check } from 'lucide-react';
 
 const PHASES = [
   { key: 'discovery', label: 'Discovery', short: '1' },

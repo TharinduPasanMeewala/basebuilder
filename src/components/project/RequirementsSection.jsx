@@ -1,9 +1,8 @@
 import { invokeCodeAI } from '@/lib/codeAI';
 import React, { useState, useEffect } from 'react';
-import { Plus, Wand2, Trash2, Check, Filter, ChevronDown } from 'lucide-react';
+import { Plus, Wand2, Trash2, ChevronDown } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {

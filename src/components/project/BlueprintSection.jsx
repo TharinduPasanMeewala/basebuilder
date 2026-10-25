@@ -1,6 +1,6 @@
 import { invokeCodeAI } from '@/lib/codeAI';
 import React, { useState, useEffect } from 'react';
-import { Sparkles, Download, CheckCircle, AlertCircle, Clock, FileText, Database, Layout, GitBranch, Code, Shield } from 'lucide-react';
+import { Sparkles, Download, CheckCircle, AlertCircle, FileText, Database, Layout, GitBranch, Code } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 
