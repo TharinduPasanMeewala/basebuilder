@@ -76,6 +76,7 @@ export default function HostingSection({ project }) {
       <div className="text-xs text-muted-foreground leading-relaxed rounded-xl border border-border p-4"><p className="font-semibold text-foreground mb-1">What’s included</p>Runnable Vite + React source, a production web server with deep-link routing, Docker files, domain HTTPS configuration, and static-host rewrites. Generated record screens use browser-local storage. Shared databases, user accounts, cloud integrations and workflow execution require a configured backend.</div>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       {notice && <p role="status" className="text-sm flex gap-2 items-center"><CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />{notice}</p>}
+      <p className="text-xs text-muted-foreground">Hosting the builder frontend itself is also supported by the repository Dockerfile and SELF_HOSTING.md. Its authentication, data and AI gateway continue to run on Base44.</p>
       <div className="flex flex-wrap gap-3 items-center"><Button onClick={download} disabled={busy || loading} className="gap-2">{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}{busy ? 'Preparing package…' : 'Download hosting package'}</Button>{record?.snapshot?.last_prepared_at && <span className="text-xs text-muted-foreground">Last prepared {new Date(record.snapshot.last_prepared_at).toLocaleString()}</span>}</div>
     </div>
   </section>;

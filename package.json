@@ -10,7 +10,9 @@
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc -p ./jsconfig.json",
     "preview": "vite preview",
-    "test:features": "node --test tests/*.test.mjs"
+    "test:features": "node --test tests/*.test.mjs",
+    "start": "node hosting/serve.mjs",
+    "test:exports": "node scripts/verify-exports.mjs"
   },
   "dependencies": {
     "@base44/sdk": "^0.8.57",
