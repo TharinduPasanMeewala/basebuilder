@@ -17,10 +17,14 @@ export default function Designable({ id, label, enabled, selectedId, onSelect, s
 
   return (
     <div
+      tabIndex={enabled ? 0 : undefined}
+      role={enabled ? "button" : undefined}
+      aria-label={enabled ? "Select " + label : undefined}
+      onKeyDown={enabled ? event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.stopPropagation(); onSelect(id, label); } } : undefined}
       data-design-label={label}
       data-design-id={id}
       onClickCapture={enabled ? (event) => { if (event.target.closest('[data-design-id]') !== event.currentTarget) return; event.preventDefault(); event.stopPropagation(); onSelect(id, label); } : undefined}
-      className={`${className} ${enabled ? 'relative cursor-move transition-all hover:ring-2 hover:ring-primary/50' : ''} ${enabled && selected ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''}`}
+      className={`${className} ${enabled ? 'relative cursor-pointer transition-all hover:ring-2 focus-visible:ring-2 hover:ring-primary/50' : ''} ${enabled && selected ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''}`}
       style={style}
     >
       {enabled && selected && <span className="absolute -top-5 left-0 rounded bg-primary px-2 py-0.5 text-[10px] font-medium text-primary-foreground z-10">{label}</span>}
