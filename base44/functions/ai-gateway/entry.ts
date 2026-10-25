@@ -138,7 +138,8 @@ async function requestModel(connection, input) {
   await publicEndpoint(connection.base_url);
   const request = buildProviderRequest(connection, input);
   const response = await fetch(request.url, { method: 'POST', headers: request.headers,
-    body: JSON.stringify(request.body), redirect: 'error', signal: AbortSignal.timeout(120000) });
+    body: JSON.stringify(request.body), redirect: 'manual', signal: AbortSignal.timeout(120000) });
+  if (response.status >= 300 && response.status < 400) throw new Error('The AI provider redirected the request. Check the API base URL in Settings.');
   if (!response.ok) {
     // Provider error bodies can echo credentials and prompts. Never return them.
     const detail = response.status === 401 || response.status === 403 ? 'Check the API key and model access.'
