@@ -1,3 +1,4 @@
+import { invokeCodeAI } from '@/lib/codeAI';
 import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -24,7 +25,7 @@ export default function ImageImportDialog({ open, onClose, project, onImported }
     setAnalyzing(true);
     try {
       const { file_url } = await base44.integrations.Core.UploadFile({ file });
-      const res = await base44.integrations.Core.InvokeLLM({
+      const res = await invokeCodeAI({
         prompt: `Analyze this UI screenshot/mockup of an application. Identify:
 1. The pages/screens visible or implied (dashboard, lists, forms, etc.)
 2. The data entities being managed, with their fields and types (string, number, boolean, date, enum)

@@ -1,3 +1,4 @@
+import { invokeCodeAI } from '@/lib/codeAI';
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, Sparkles, FileText, Users, ChevronDown, Image, Link, X, Paperclip } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
@@ -153,7 +154,7 @@ Your role: Review the ENTIRE specification across all agents — find gaps, inco
 
 async function extractRequirementsInBackground(project, userMsg, assistantMsg) {
   try {
-    const result = await base44.integrations.Core.InvokeLLM({
+    const result = await invokeCodeAI({
       prompt: `Requirements extraction engine. Extract concrete software requirements from this exchange.
 PROJECT: "${project.name}" (${project.type?.replace(/_/g, ' ')})
 USER: ${userMsg}
@@ -213,7 +214,7 @@ Return only CONCRETE, ACTIONABLE requirements. Empty array if none.`,
 async function extractVisualSpecsInBackground(project, userMsg, assistantMsg, fileUrls) {
   if (!fileUrls?.length) return { entities: 0, pages: 0 };
   try {
-    const result = await base44.integrations.Core.InvokeLLM({
+    const result = await invokeCodeAI({
       prompt: `Visual product analysis engine. Analyze the attached screenshot, wireframe, sketch, or UI reference and convert it into Sara Builder AI project specs.
 PROJECT: "${project.name}" (${project.type?.replace(/_/g, ' ')})
 USER REQUEST: ${userMsg}
@@ -379,7 +380,7 @@ export default function ChatSection({ project, onRefresh }) {
 
   const sendInitialGreeting = async (convo) => {
     setSending(true);
-    const response = await base44.integrations.Core.InvokeLLM({
+    const response = await invokeCodeAI({
       prompt: `You are "Alex", a senior Business Analyst. Introduce yourself briefly and start requirements discovery for "${project.name}" (a ${project.type?.replace(/_/g, ' ')}${project.description ? ` — ${project.description}` : ''}). Mention that a full team of specialist agents (PM, Solution Architect, DB Architect, UI/UX, Backend, QA) will collaborate on this project. Ask the first discovery question.`,
       model: 'claude_sonnet_4_6',
     });
@@ -455,7 +456,7 @@ ${history}
 
 Respond as ${AGENT_NAMES[activeAgent]}. Be professional, specific, and reference the shared project knowledge when relevant. Use markdown for structured content.${fileUrls.length > 0 ? '\n\nThe user has shared visual/URL content — analyze it carefully. If it is a screenshot, wireframe, or sketch, identify the UI screens, forms, tables, data fields, entities, relationships, and user workflows it implies.' : ''}`;
 
-    const response = await base44.integrations.Core.InvokeLLM({
+    const response = await invokeCodeAI({
       prompt,
       model: 'claude_sonnet_4_6',
       file_urls: fileUrls.length > 0 ? fileUrls : undefined,
@@ -516,7 +517,7 @@ ${lastFewMessages}
 
 As ${AGENT_NAMES[agentType]}, add your perspective on the discussion above. Reference your domain expertise and what the other agents have said. Keep it focused and valuable (3-6 sentences or a short structured list). You may agree, extend, or respectfully challenge points made by other agents.`;
 
-    const response = await base44.integrations.Core.InvokeLLM({
+    const response = await invokeCodeAI({
       prompt,
       model: 'claude_sonnet_4_6',
     });

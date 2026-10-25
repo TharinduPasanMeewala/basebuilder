@@ -1,3 +1,4 @@
+import { invokeCodeAI } from '@/lib/codeAI';
 import React, { useState } from 'react';
 import { Globe, ArrowRight, Loader2, AlertCircle, Sparkles, Layout, Database, Workflow } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -48,7 +49,7 @@ export default function CloneWebsiteDialog({ open, onClose }) {
     setError('');
     setAnalysis(null);
     try {
-      const result = await base44.integrations.Core.InvokeLLM({
+      const result = await invokeCodeAI({
         model: 'gemini_3_flash',
         add_context_from_internet: true,
         prompt: `Analyze this public website and design a similar application blueprint inside ArchitectAI: ${websiteUrl}

@@ -1,3 +1,4 @@
+import { invokeCodeAI } from '@/lib/codeAI';
 import React, { useState, useEffect } from 'react';
 import { Sparkles, Download, CheckCircle, AlertCircle, Clock, FileText, Database, Layout, GitBranch, Code, Shield } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
@@ -58,7 +59,7 @@ Key modules: ${[...new Set(entities.map(e => e.module).filter(Boolean))].join(',
 
 Write a concise but comprehensive executive summary (3-4 paragraphs) covering: business purpose, key features, technical architecture overview, and expected business value.`;
 
-    const summary = await base44.integrations.Core.InvokeLLM({
+    const summary = await invokeCodeAI({
       prompt: summaryPrompt,
       model: 'claude_sonnet_4_6',
     });

@@ -1,3 +1,4 @@
+import { invokeCodeAI } from '@/lib/codeAI';
 import React, { useState, useEffect } from 'react';
 import { Plus, Wand2, Trash2, ChevronRight, ChevronDown, Database, Link, LayoutGrid, List } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
@@ -72,7 +73,7 @@ Generate 8-12 entities. Return a JSON object with an "entities" array. Each enti
 Example:
 {"entities":[{"name":"Customer","description":"Stores customer info","module":"Sales","fields":[{"name":"full_name","type":"string","required":true,"description":"Customer full name"}],"relationships":[]}]}`;
 
-      const raw = await base44.integrations.Core.InvokeLLM({
+      const raw = await invokeCodeAI({
         prompt,
         model: 'claude_sonnet_4_6',
       });

@@ -1,3 +1,4 @@
+import { invokeCodeAI } from '@/lib/codeAI';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, RefreshCw, Trash2, Pencil, Database, RotateCcw, MousePointerClick, Sparkles } from 'lucide-react';
@@ -197,7 +198,7 @@ export default function LivePreviewSection({ project, initialDesignMode = false,
 
   const generateUiPreview = useMutation({
     mutationFn: async () => {
-      const result = await base44.integrations.Core.InvokeLLM({
+      const result = await invokeCodeAI({
         prompt: `Generate UX/UI page designs for this app so they can be shown in a live app preview.\nProject: ${project.name}\nDescription: ${project.description || ''}\nType: ${project.type}\nData models: ${JSON.stringify(entities.map(e => ({ name: e.name, description: e.description, fields: Object.keys(e.schema?.properties || {}) })))}\nExisting pages: ${JSON.stringify(pages.map(p => ({ name: p.name, type: p.type, route: p.route })))}\nCreate only missing practical dashboard, list, detail, and form screens. Do not duplicate existing screens. Every non-dashboard page must have a component with data_source exactly equal to an existing data model name, type (table or form), name and description. Use existing fields only. The runtime supports working CRUD, search and record details; do not claim integrations or specialized visualizations are implemented.`,
         response_json_schema: {
           type: 'object',

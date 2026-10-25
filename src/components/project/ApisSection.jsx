@@ -1,3 +1,4 @@
+import { invokeCodeAI } from '@/lib/codeAI';
 import React, { useState, useEffect } from 'react';
 import { Plus, Wand2, Trash2, Code, ChevronRight, ChevronDown } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
@@ -43,7 +44,7 @@ export default function ApisSection({ project, onRefresh }) {
       const entities = await base44.entities.DataEntity.filter({ project_id: project.id });
       const entityNames = entities.map(e => e.name).join(', ');
 
-      const raw = await base44.integrations.Core.InvokeLLM({
+      const raw = await invokeCodeAI({
         prompt: `Design a concise REST API specification for a ${project.type?.replace(/_/g, ' ')} application called "${project.name}".
 
 Data entities: ${entityNames || 'Not defined yet'}

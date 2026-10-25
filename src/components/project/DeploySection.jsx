@@ -1,3 +1,4 @@
+import { invokeCodeAI } from '@/lib/codeAI';
 import React, { useState, useEffect } from 'react';
 import {
   Globe, ShieldCheck, GitMerge, Container, Cloud, ChevronDown, ChevronRight,
@@ -54,7 +55,7 @@ Tech Stack: ${devPlan?.tech_stack ? JSON.stringify(devPlan.tech_stack).slice(0, 
 Blueprint completeness: ${blueprint?.completeness_score || 0}%
       `.trim();
 
-      const raw = await base44.integrations.Core.InvokeLLM({
+      const raw = await invokeCodeAI({
         prompt: `You are a DevOps architect. Create a deployment plan for this project.
 
 ${context}

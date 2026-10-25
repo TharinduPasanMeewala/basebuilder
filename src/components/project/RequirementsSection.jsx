@@ -1,3 +1,4 @@
+import { invokeCodeAI } from '@/lib/codeAI';
 import React, { useState, useEffect } from 'react';
 import { Plus, Wand2, Trash2, Check, Filter, ChevronDown } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
@@ -72,7 +73,7 @@ Generate 15-25 well-structured requirements covering different categories (funct
 
 Return ONLY a JSON object with a "requirements" array. Each item must have: title, description, category (one of: functional, non_functional, business_rule, user_story, constraint, assumption), priority (one of: critical, high, medium, low), module, acceptance_criteria.`;
 
-      const result = await base44.integrations.Core.InvokeLLM({
+      const result = await invokeCodeAI({
         prompt,
         response_json_schema: {
           type: 'object',

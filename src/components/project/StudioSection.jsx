@@ -1,3 +1,4 @@
+import { invokeCodeAI } from '@/lib/codeAI';
 import React, { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { MonitorPlay, RefreshCw } from 'lucide-react';
@@ -117,7 +118,7 @@ export default function StudioSection({ project, onRefresh }) {
     setMessages(m => [...m, { role: 'user', content: text, images: imageUrls }]);
     setBusy(true);
     try {
-      const res = await base44.integrations.Core.InvokeLLM({
+      const res = await invokeCodeAI({
         ...(imageUrls.length > 0 ? { file_urls: imageUrls } : {}),
         prompt: `You are an AI app editor for "${design.app_name || project.name}" (${project.type?.replace(/_/g, ' ')}).
 

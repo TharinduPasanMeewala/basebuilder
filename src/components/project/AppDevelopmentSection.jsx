@@ -1,3 +1,4 @@
+import { invokeCodeAI } from '@/lib/codeAI';
 import React, { useState, useEffect } from 'react';
 import {
   Rocket, Code2, Layers, GitBranch, Calendar, CheckCircle2,
@@ -58,7 +59,7 @@ API Endpoints: ${apis.length}
 Modules: ${[...new Set(entities.map(e => e.module).filter(Boolean))].join(', ') || 'not defined'}
       `.trim();
 
-      const raw = await base44.integrations.Core.InvokeLLM({
+      const raw = await invokeCodeAI({
         prompt: `You are a senior software architect. Create a comprehensive app development plan for the following project.
 
 ${context}

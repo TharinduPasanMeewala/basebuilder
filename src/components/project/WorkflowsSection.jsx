@@ -1,3 +1,4 @@
+import { invokeCodeAI } from '@/lib/codeAI';
 import React, { useState, useEffect } from 'react';
 import { Plus, Wand2, Trash2, GitBranch, ChevronRight, ChevronDown, ArrowRight } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
@@ -48,7 +49,7 @@ export default function WorkflowsSection({ project, onRefresh }) {
       ]);
       const entityNames = entities.map(e => e.name).join(', ');
 
-      const raw = await base44.integrations.Core.InvokeLLM({
+      const raw = await invokeCodeAI({
         prompt: `Design business workflows and automations for a ${project.type?.replace(/_/g, ' ')} application called "${project.name}".
 
 Data entities: ${entityNames || 'Not defined yet'}

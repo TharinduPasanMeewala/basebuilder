@@ -1,3 +1,4 @@
+import { invokeCodeAI } from '@/lib/codeAI';
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Square, RotateCcw, Zap } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
@@ -192,7 +193,7 @@ ${priorInRound || '(You are the first to speak on this topic)'}
 
 Now give YOUR perspective on this topic as ${AGENT_NAMES[agentType]}. Be specific, reference actual project details, and directly respond to points raised by other agents. Keep it to 3-5 key points. Use markdown.`;
 
-      const response = await base44.integrations.Core.InvokeLLM({
+      const response = await invokeCodeAI({
         prompt,
         model: 'claude_sonnet_4_6',
       });
