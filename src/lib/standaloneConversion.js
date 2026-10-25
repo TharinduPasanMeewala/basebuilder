@@ -82,7 +82,7 @@ export function convertStandalone(sourceFiles, templates, options = {}) {
         next = next.replace(/\bDeno\.serve\s*\(/, 'export default ('); report.converted_functions.push(path);
       }
       next = next.replace(/(["'])https:\/\/(?:sara-global-s4(?:-copy)?\.base44\.app|s4\.saraglobal\.lk)([^"']*)\1/g, (_, quote, suffix) => '(process.env.APP_URL + ' + JSON.stringify(suffix) + ')');
-      next = next.replace(/(['"])https:\/\/app\.base44\.com\1/g, "'http://localhost:3000'");
+      next = next.replace(/(['"])https:\/\/app\.base44\.com\1/g, '(process.env.APP_URL)');
       if (path === 'base44/functions/syncEmployees/entry.ts') {
         next = next.replace(/(['"])https:\/\/base44\.app\/api\/apps\/[^/]+\/entities\/Employee\1/g, "(process.env.EMPLOYEE_SOURCE_URL || '')");
         if (!report.external_environment.includes('EMPLOYEE_SOURCE_URL')) report.external_environment.push('EMPLOYEE_SOURCE_URL');
@@ -101,13 +101,14 @@ export function convertStandalone(sourceFiles, templates, options = {}) {
     // Application-owned callback examples become relative URLs in browser source.
     if (path.startsWith('src/') || path.startsWith('browser-extension/') || path.startsWith('public/') || path.startsWith('canva-app/')) {
       if (path.startsWith('src/') && !path.startsWith('src/canva-app/')) {
+        next = next.split('`https://${appParams.appId}.base44.app`').join('window.location.origin');
         next = next.replace(/https:\/\/(?:sara-global-s4(?:-copy)?\.base44\.app|s4\.saraglobal\.lk)\/login(?:\?[^"'\s`]*)?/gi, '/standalone-login');
         next = next.replace(/https:\/\/(?:sara-global-s4(?:-copy)?\.base44\.app|s4\.saraglobal\.lk)(?=\/)/g, '');
       } else next = next.replace(/https:\/\/(?:sara-global-s4(?:-copy)?\.base44\.app|s4\.saraglobal\.lk)/g, options.publicUrl || 'http://localhost:3000');
     }
     for (const [url, local] of Object.entries(options.assetMap || {})) {
       if (path.startsWith('base44/') && /\.[cm]?[jt]sx?$/.test(path)) next = next.split(JSON.stringify(url)).join('(process.env.APP_URL + ' + JSON.stringify(local) + ')').split("'" + url + "'").join('(process.env.APP_URL + ' + JSON.stringify(local) + ')');
-      else next = next.split(url).join(local);
+      else next = next.split(url).join(path.startsWith('base44/emails/') ? (options.publicUrl || 'http://localhost:3000') + local : local);
     }
     files.set(path, next);
   }
@@ -117,7 +118,10 @@ export function convertStandalone(sourceFiles, templates, options = {}) {
     for (const script of manifest.content_scripts || []) if (script.js?.some(value => value.includes('content-s4'))) script.matches = [pattern];
     files.set(path,JSON.stringify(manifest,null,2));
   }
+  if (files.has('README.md')) files.set('migration/original-README.md', files.get('README.md'));
   for (const file of templates) files.set(file.path, file.content);
+  files.set('README.md', '# Standalone application\n\nStart with [STANDALONE.md](STANDALONE.md) for localhost, custom-domain hosting, accounts, database imports and integration configuration. Use Node.js 24.12 or newer within the 24 series.\n\n```sh\nnpm install\ncp .env.example .env\n# Set ADMIN_EMAIL and ADMIN_PASSWORD in .env\nnpm run build\nnpm start\n```\n\nOpen http://localhost:3000. Source files do not include hosted database records or passwords. Migration details are in `migration/report.json`. The original README is preserved under `migration/`.\n');
+  if (!source.entities.length) files.set('base44/entities/.gitkeep', '');
   files.set('migration/original-package.json', originalPackage);
   if (files.has('vite.config.js')) files.set('migration/original-vite.config.txt', files.get('vite.config.js'));
   files.delete('package-lock.json');
