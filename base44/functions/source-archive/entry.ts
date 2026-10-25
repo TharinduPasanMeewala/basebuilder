@@ -82,7 +82,7 @@ export default async function(req) {
       return {projectId:project.id,archive_id:archive.id,summary};
     };
     if(action==='begin'){
-      if(!body.project_name?.trim()||body.project_name.length>100||!Number.isSafeInteger(body.part_count)||body.part_count<1||body.part_count>1400||
+      if(typeof body.project_name!=='string'||!body.project_name.trim()||body.project_name.length>100||!Number.isSafeInteger(body.part_count)||body.part_count<1||body.part_count>1400||
         !Number.isSafeInteger(body.compressed_bytes)||body.compressed_bytes<1||body.compressed_bytes>MAX_ZIP||!/^[a-f0-9]{64}$/.test(body.sha256||''))throw error(400,'Invalid archive upload metadata.');
       const previous=await models.SourceArchive.filter({owner_id:user.id},'-created_date',101);if(previous.length>=100)throw error(400,'Archive limit reached. Contact the app administrator.');
       const archive=await models.SourceArchive.create({owner_id:user.id,project_name:body.project_name.trim(),filename:String(body.filename||'source.zip').replace(/[\r\n/\\]/g,'_').slice(0,150),
@@ -98,12 +98,16 @@ export default async function(req) {
     if(action==='github'){
       const match=String(body.repo_url||'').match(/^https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/?$/);
       if(!match)throw error(400,'Enter a public GitHub repository URL.');
-      const response=await fetch('https://api.github.com/repos/'+match[1]+'/'+match[2]+'/zipball',{headers:{Accept:'application/vnd.github+json','User-Agent':'BaseBuilder',...(Deno.env.get('GITHUB_TOKEN')?{Authorization:'Bearer '+Deno.env.get('GITHUB_TOKEN')}: {})},signal:AbortSignal.timeout(60000)});
+      const token=user.role==='admin'?Deno.env.get('GITHUB_TOKEN'):'';
+      const response=await fetch('https://api.github.com/repos/'+match[1]+'/'+match[2]+'/zipball',{headers:{Accept:'application/vnd.github+json','User-Agent':'BaseBuilder',...(token?{Authorization:'Bearer '+token}: {})},signal:AbortSignal.timeout(60000)});
       if(!response.ok)throw error(response.status===404?404:502,'Could not download this GitHub repository.');
       if(Number(response.headers.get('content-length'))>MAX_ZIP)throw error(413,'Repository archive exceeds 15 MB.');
-      const bytes=new Uint8Array(await response.arrayBuffer());if(bytes.length>MAX_ZIP)throw error(413,'Repository archive exceeds 15 MB.');
+      const reader=response.body.getReader(),download=[];let received=0;
+      try{while(true){const {done,value}=await reader.read();if(done)break;received+=value.length;if(received>MAX_ZIP)throw error(413,'Repository archive exceeds 15 MB.');download.push(value);}}finally{await reader.cancel();}
+      const bytes=new Uint8Array(received);let offset=0;for(const chunk of download){bytes.set(chunk,offset);offset+=chunk.length;}
       const source=await JSZip.loadAsync(bytes),all=entries(source),prefix=all[0]?.name.split('/')[0]+'/';const zip=new JSZip();
-      for(const entry of all){const path=entry.name.startsWith(prefix)?entry.name.slice(prefix.length):entry.name;if(!path||excluded(path))continue;zip.file(path,await boundedBytes(entry));}
+      if(all.length>MAX_FILES)throw error(413,'Import at most 5,000 files.');
+      let expanded=0;for(const entry of all){const path=entry.name.startsWith(prefix)?entry.name.slice(prefix.length):entry.name;if(!path||excluded(path))continue;const content=await boundedBytes(entry);expanded+=content.length;if(expanded>MAX_EXPANDED)throw error(413,'Expanded source exceeds 80 MB.');zip.file(path,content);}
       const sanitized=await zip.generateAsync({type:'uint8array',compression:'DEFLATE'});
       const archive=await models.SourceArchive.create({owner_id:user.id,project_name:String(body.project_name||match[2]).slice(0,100),filename:match[2]+'.zip',status:'uploading',compressed_bytes:sanitized.length,sha256:await hash(sanitized),part_count:1});
       const count=await saveBytes(archive.id,sanitized);const saved=await models.SourceArchive.update(archive.id,{part_count:count});
@@ -152,7 +156,7 @@ export default async function(req) {
       for(const entry of entries(zip))if(excluded(entry.name))zip.remove(entry.name);
       for(const patch of patches){if(patch.deleted)zip.remove(patch.path);else zip.file(patch.path,await join(patch.group_id,patch.part_count));}
       const bytes=await zip.generateAsync({type:'uint8array',compression:'DEFLATE'});
-      return new Response(bytes,{headers:{'Content-Type':'application/zip','Content-Disposition':'attachment; filename="'+archive.filename+'"','Cache-Control':'no-store'}});
+      return new Response(bytes,{headers:{'Content-Type':'application/zip','Content-Disposition':"attachment; filename*=UTF-8''"+encodeURIComponent(archive.filename),'Cache-Control':'no-store'}});
     }
     throw error(400,'Unknown archive action.');
   }catch(error){return Response.json({error:error.message||'Source archive operation failed.'},{status:error.status||500});}
