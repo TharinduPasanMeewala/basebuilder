@@ -21,11 +21,11 @@ export function normalizeConnection(value, existing = {}) {
     max_tokens: Math.min(32768, Math.max(256, Math.round(Number(value.max_tokens) || 8192))) };
 }
 
-export function validateEndpoint(value) {
+export function validateEndpoint(value, allowQuery = false) {
   let url;
   try { url = new URL(value); } catch { throw new Error('Enter a valid HTTPS API base URL.'); }
   const host = url.hostname.toLowerCase();
-  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash ||
+  if (url.protocol !== 'https:' || url.username || url.password || (!allowQuery && url.search) || url.hash ||
       (url.port && url.port !== '443') || !host.includes('.') || /^[\d.]+$/.test(host) ||
       host.includes(':') || /(^|\.)(localhost|local|internal|test|invalid)$/.test(host) ||
       host.endsWith('.local') || host.endsWith('.internal') || host === 'metadata.google.internal') {
@@ -52,7 +52,7 @@ export function buildProviderRequest(connection, { prompt, response_json_schema,
   if (urls.length > 6) throw new Error('Attach at most six images.');
   if (urls.length && !connection.supports_images) throw new Error('This connection has image input disabled. Enable it in AI Settings for a vision model, or use Built-in AI.');
   if (urls.length && connection.provider === 'gemini') throw new Error('Image attachments currently require Built-in AI, OpenAI-compatible vision, or Claude. Gemini connections support text prompts.');
-  for (const url of urls) validateEndpoint(url);
+  for (const url of urls) validateEndpoint(url, true);
   let text = prompt;
   if (response_json_schema) text += '\n\nReturn ONLY valid JSON matching this JSON schema. Do not use markdown fences:\n' + JSON.stringify(response_json_schema);
   const headers = { 'Content-Type': 'application/json' };
