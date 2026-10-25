@@ -1,0 +1,44 @@
+{
+  "name": "SourceFileOverlay",
+  "type": "object",
+  "properties": {
+    "owner_id": {
+      "type": "string"
+    },
+    "archive_id": {
+      "type": "string"
+    },
+    "path": {
+      "type": "string"
+    },
+    "group_id": {
+      "type": "string"
+    },
+    "part_count": {
+      "type": "integer"
+    },
+    "byte_count": {
+      "type": "integer"
+    },
+    "sha256": {
+      "type": "string"
+    },
+    "deleted": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "owner_id",
+    "archive_id",
+    "path",
+    "group_id",
+    "part_count"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}
