@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import JSZip from 'jszip';
+import { filesFromCode, withHostingFiles } from '@/lib/hosting';
 
 // Map filenames to a language label for the preview header
 function getFileLanguage(filename) {
@@ -90,54 +91,28 @@ export default function PublishedApp() {
 
   const toggleCode = (key) => setExpandedCode(e => ({ ...e, [key]: !e[key] }));
 
+  const exportFiles = () => withHostingFiles(filesFromCode(codeToShow), project);
   const downloadZip = async () => {
     if (!codeToShow) return;
     setDownloading(true);
-    const zip = new JSZip();
-    const projectSlug = project.name.replace(/\s+/g, '-').toLowerCase();
-    const root = zip.folder(projectSlug);
-
-    Object.entries(codeToShow).forEach(([section, files]) => {
-      const pathPrefix = SECTION_PATHS[section] ?? `${section}/`;
-      Object.entries(files).forEach(([filename, content]) => {
-        const fullPath = pathPrefix + filename;
-        // Create nested folders as needed
-        const parts = fullPath.split('/');
-        if (parts.length > 1) {
-          const dir = parts.slice(0, -1).join('/');
-          root.folder(dir);
-        }
-        root.file(fullPath, content || '');
-      });
-    });
-
-    // Add a README
-    root.file('README.md', `# ${project.name}\n\n${project.description || ''}\n\n## Getting Started\n\n\`\`\`bash\nnpm install\nnpm run dev\n\`\`\`\n\n## Deploy\n\nDeploy to Vercel, Netlify, or Railway.\n`);
-
-    const blob = await zip.generateAsync({ type: 'blob' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${projectSlug}.zip`;
-    a.click();
-    URL.revokeObjectURL(url);
-    setDownloading(false);
+    try {
+      const zip = new JSZip();
+      const projectSlug = (project.name || 'app').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'app';
+      const root = zip.folder(projectSlug);
+      exportFiles().forEach(file => root.file(file.path, file.content));
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a'); anchor.href = url; anchor.download = projectSlug + '.zip'; anchor.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) { window.alert('Download failed: ' + err.message); }
+    finally { setDownloading(false); }
   };
 
   const pushToGitHub = async () => {
     if (!codeToShow) return;
     setPushingGitHub(true);
     try {
-      const files = [];
-      Object.entries(codeToShow).forEach(([section, sectionFiles]) => {
-        const pathPrefix = SECTION_PATHS[section] ?? `${section}/`;
-        Object.entries(sectionFiles).forEach(([filename, content]) => {
-          files.push({ path: pathPrefix + filename, content: content || '' });
-        });
-      });
-      // Add README
-      files.push({ path: 'README.md', content: `# ${project.name}\n\n${project.description || ''}\n\n## Getting Started\n\n\`\`\`bash\nnpm install\nnpm run dev\n\`\`\`\n` });
-
+      const files = exportFiles();
       const res = await base44.functions.invoke('pushToGitHub', {
         projectName: project.name,
         files,
@@ -165,13 +140,7 @@ export default function PublishedApp() {
     if (!codeToShow) return;
     setUploadingDrive(true);
     try {
-      const files = [];
-      Object.entries(codeToShow).forEach(([section, sectionFiles]) => {
-        const pathPrefix = SECTION_PATHS[section] ?? `${section}/`;
-        Object.entries(sectionFiles).forEach(([filename, content]) => {
-          files.push({ path: pathPrefix + filename, content: content || '' });
-        });
-      });
+      const files = exportFiles();
       const res = await base44.functions.invoke('uploadToDrive', {
         projectName: project.name,
         files,
