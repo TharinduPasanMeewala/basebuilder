@@ -60,9 +60,9 @@ export function convertStandalone(sourceFiles, templates, options = {}) {
     start: 'node --env-file-if-exists=.env standalone/server/index.mjs', build: 'vite build', 'test:standalone': 'node --test standalone/tests/*.test.mjs' };
   pkg.dependencies ||= {}; pkg.dependencies.ws = '^8.18.3';
   for (const [path, content] of files) {
-    if (typeof content !== 'string' || !/\.[cm]?[jt]sx?$/.test(path)) continue;
+    if (typeof content !== 'string') continue;
     let next = content;
-    if (path.startsWith('base44/')) {
+    if (path.startsWith('base44/') && /\.[cm]?[jt]sx?$/.test(path)) {
       next = next.replace(/\b(const|let|var)\s+([A-Za-z_$][A-Za-z0-9_$]*(?:KEY|TOKEN|SECRET|PASSWORD|PASS)[A-Za-z0-9_$]*)\s*=\s*(["'])([^"'\n]{12,})\3/gi, (original,kind,name,quote,value) => {
         if (!/^[a-fA-F0-9]{24,}$/.test(value) && !value.startsWith('sk-') && !value.startsWith('re_') && !value.startsWith('ghp_') && !value.startsWith('eyJ')) return original;
         const environment = name === 'EXT_API_KEY' ? 'EMPLOYEE_SOURCE_API_KEY' : name === 'EXTERNAL_API_KEY' ? 'ATTENDANCE_SOURCE_API_KEY' : 'MIGRATED_' + name.toUpperCase();
@@ -99,19 +99,19 @@ export function convertStandalone(sourceFiles, templates, options = {}) {
       report.fixes.push('Bind spreadsheet collaboration to its configured room ID.');
     }
     // Application-owned callback examples become relative URLs in browser source.
-    if (path.startsWith('src/') || path.startsWith('browser-extension/') || path.startsWith('canva-app/')) {
+    if (path.startsWith('src/') || path.startsWith('browser-extension/') || path.startsWith('public/') || path.startsWith('canva-app/')) {
       if (path.startsWith('src/') && !path.startsWith('src/canva-app/')) {
         next = next.replace(/https:\/\/(?:sara-global-s4(?:-copy)?\.base44\.app|s4\.saraglobal\.lk)\/login(?:\?[^"'\s`]*)?/gi, '/standalone-login');
         next = next.replace(/https:\/\/(?:sara-global-s4(?:-copy)?\.base44\.app|s4\.saraglobal\.lk)(?=\/)/g, '');
-      } else next = next.replace(/https:\/\/(?:sara-global-s4(?:-copy)?\.base44\.app|s4\.saraglobal\.lk)(?=\/)/g, options.publicUrl || 'http://localhost:3000');
+      } else next = next.replace(/https:\/\/(?:sara-global-s4(?:-copy)?\.base44\.app|s4\.saraglobal\.lk)/g, options.publicUrl || 'http://localhost:3000');
     }
     for (const [url, local] of Object.entries(options.assetMap || {})) {
-      if (path.startsWith('base44/')) next = next.split(JSON.stringify(url)).join('(process.env.APP_URL + ' + JSON.stringify(local) + ')').split("'" + url + "'").join('(process.env.APP_URL + ' + JSON.stringify(local) + ')');
+      if (path.startsWith('base44/') && /\.[cm]?[jt]sx?$/.test(path)) next = next.split(JSON.stringify(url)).join('(process.env.APP_URL + ' + JSON.stringify(local) + ')').split("'" + url + "'").join('(process.env.APP_URL + ' + JSON.stringify(local) + ')');
       else next = next.split(url).join(local);
     }
     files.set(path, next);
   }
-  for (const [path,content] of files) if (path.startsWith('browser-extension/') && path.endsWith('/manifest.json') && typeof content === 'string') {
+  for (const [path,content] of files) if (/^(?:public\/)?browser-extension\//.test(path) && path.endsWith('/manifest.json') && typeof content === 'string') {
     const manifest = JSON.parse(content), target = new URL(options.publicUrl || 'http://localhost:3000'), pattern = target.protocol + '//' + target.hostname + '/*';
     manifest.host_permissions = [...new Set([...(manifest.host_permissions || []).filter(value => !value.includes('base44.app') && !value.includes('s4.saraglobal.lk')),pattern])];
     for (const script of manifest.content_scripts || []) if (script.js?.some(value => value.includes('content-s4'))) script.matches = [pattern];
