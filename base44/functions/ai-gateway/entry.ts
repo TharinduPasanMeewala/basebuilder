@@ -13,6 +13,7 @@ function normalizeConnection(value, existing = {}) {
   const name = String(value.name || '').trim();
   if (!name || name.length > 80) throw new Error('Enter a connection name (1–80 characters).');
   if (!model || model.length > 200 || /[\r\n]/.test(model)) throw new Error('Enter the exact model ID from your provider.');
+  if (provider === 'gemini' && !/^[a-z0-9][a-z0-9._-]*-[a-z0-9._-]+$/.test(model.replace(/^models\//, ''))) throw new Error('Enter a full Gemini model ID, for example gemini-2.5-flash.');
   const base_url = provider === 'compatible' ? String(value.base_url || '').replace(/\/+$/, '') : PROVIDER_BASES[provider];
   validateEndpoint(base_url);
   const sameDestination = provider === existing.provider && base_url === existing.base_url;

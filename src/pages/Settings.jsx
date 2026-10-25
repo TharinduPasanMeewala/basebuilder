@@ -13,6 +13,11 @@ const PRESETS = [
   { name: 'Custom / local model gateway', provider: 'compatible', base_url: '', hint: 'Exact model ID exposed by your endpoint', json_mode: false },
 ];
 const EMPTY = { name: '', provider: 'openai', model: '', base_url: '', api_key: '', json_mode: true, supports_images: false, max_tokens: 8192 };
+const MODEL_SUGGESTIONS = {
+  openai: ['gpt-5', 'gpt-5-mini', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-4o', 'gpt-4o-mini'],
+  anthropic: ['claude-sonnet-4-5', 'claude-opus-4-1', 'claude-3-7-sonnet-latest', 'claude-3-5-haiku-latest'],
+  gemini: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash'],
+};
 
 export default function Settings() {
   const queryClient = useQueryClient();
@@ -81,7 +86,7 @@ export default function Settings() {
             <label className="space-y-1.5 text-xs font-medium">API protocol<select value={form.provider} onChange={e => patch({ provider: e.target.value, api_key: '', base_url: '', supports_images: false })} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"><option value="openai">OpenAI</option><option value="anthropic">Anthropic Messages</option><option value="gemini">Google Gemini</option><option value="compatible">OpenAI-compatible</option></select></label>
           </div>
           {form.provider === 'compatible' && <label className="block space-y-1.5 text-xs font-medium">API base URL<Input required type="url" value={form.base_url} onChange={e => patch({ base_url: e.target.value })} placeholder="https://your-gateway.example.com/v1" /><span className="block text-muted-foreground font-normal">Include the API version path; the gateway appends /chat/completions.</span></label>}
-          <label className="block space-y-1.5 text-xs font-medium">Model ID<Input required value={form.model} onChange={e => patch({ model: e.target.value })} placeholder={form.hint || 'Enter the exact model ID from your provider'} /><span className="block text-muted-foreground font-normal">Model IDs are editable, so newly released and private models work without a builder update.</span></label>
+          <label className="block space-y-1.5 text-xs font-medium">Model ID<Input required list="model-id-suggestions" value={form.model} onChange={e => patch({ model: e.target.value })} placeholder={form.hint || 'Enter the exact model ID from your provider'} /><datalist id="model-id-suggestions">{(MODEL_SUGGESTIONS[form.provider] || []).map(id => <option key={id} value={id} />)}</datalist><span className="block text-muted-foreground font-normal">Suggested IDs match the selected protocol. Model IDs stay editable, so newly released and private models work without a builder update.</span></label>
           <label className="block space-y-1.5 text-xs font-medium"><span className="flex gap-1.5 items-center"><Key className="w-3.5 h-3.5" />API key {form.provider === 'compatible' ? '(if required by endpoint)' : ''}</span><Input type="password" autoComplete="new-password" value={form.api_key} onChange={e => patch({ api_key: e.target.value })} placeholder={editing && form.has_key ? 'Leave blank to keep the saved key' : 'Paste your provider API key'} /></label>
           <div className="rounded-xl border border-border p-4 space-y-3 text-xs">
             <label className="flex gap-2 items-center"><input type="checkbox" checked={form.json_mode} onChange={e => patch({ json_mode: e.target.checked })} />Provider supports JSON response mode</label>
