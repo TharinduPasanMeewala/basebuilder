@@ -7,6 +7,7 @@ import {
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import ReactMarkdown from 'react-markdown';
+import HostingSection from './HostingSection';
 
 const HOSTING_ICONS = {
   'AWS': '☁️', 'GCP': '☁️', 'Azure': '☁️', 'Vercel': '▲', 'Netlify': '◆',
@@ -162,7 +163,7 @@ Be specific to the project's tech stack. Provide 2-3 hosting options.`,
       {/* Header */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-card/50 flex-shrink-0">
         <Globe className="w-4 h-4 text-primary" />
-        <h2 className="text-sm font-semibold text-foreground">Deployment Plan</h2>
+        <h2 className="text-sm font-semibold text-foreground">Deploy & Hosting</h2>
         <div className="flex-1" />
         {deployPlan && !deployPlan.error && (
           <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" onClick={downloadPlan}>
@@ -178,6 +179,7 @@ Be specific to the project's tech stack. Provide 2-3 hosting options.`,
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <HostingSection project={project} />
         {!deployPlan ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mb-4">
