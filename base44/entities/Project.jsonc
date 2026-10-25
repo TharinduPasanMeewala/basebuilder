@@ -2,6 +2,20 @@
   "name": "Project",
   "type": "object",
   "properties": {
+    "source_mode": {
+      "type": "string",
+      "enum": [
+        "generated",
+        "archive"
+      ],
+      "default": "generated"
+    },
+    "source_archive_id": {
+      "type": "string"
+    },
+    "source_file_count": {
+      "type": "integer"
+    },
     "org_id": {
       "type": "string",
       "title": "Organization ID"
