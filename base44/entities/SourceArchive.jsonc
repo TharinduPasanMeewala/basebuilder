@@ -1,0 +1,50 @@
+{
+  "name": "SourceArchive",
+  "type": "object",
+  "properties": {
+    "owner_id": {
+      "type": "string"
+    },
+    "project_id": {
+      "type": "string"
+    },
+    "project_name": {
+      "type": "string"
+    },
+    "filename": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "uploading",
+        "ready",
+        "failed"
+      ]
+    },
+    "part_count": {
+      "type": "integer"
+    },
+    "compressed_bytes": {
+      "type": "integer"
+    },
+    "sha256": {
+      "type": "string"
+    },
+    "summary": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "owner_id",
+    "filename",
+    "status",
+    "part_count"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}
