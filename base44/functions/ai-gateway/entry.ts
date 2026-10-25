@@ -134,21 +134,33 @@ async function publicEndpoint(value) {
   const addresses = await lookup(url.hostname, { all: true });
   if (!addresses.length || addresses.some(item => isPrivateAddress(item.address))) throw new Error('The API hostname must resolve to a public internet address.');
 }
+// Providers explain a failed request in the response body. Return only the short
+// machine message, with the connection's key stripped, so the cause is visible.
+async function providerErrorDetail(response, apiKey) {
+  const fallback = response.status === 401 || response.status === 403 ? 'Check the API key and model access.'
+    : response.status === 404 ? 'Check the API base URL and exact model ID.'
+    : response.status === 429 ? 'The provider rate limit or quota was reached.'
+    : response.status === 400 ? 'The provider rejected the request format. Check the model ID, JSON mode, and image support in Settings.'
+    : 'The provider could not complete this request. Try again.';
+  try {
+    const text = (await response.text()).slice(0, 4000);
+    let message = '';
+    try {
+      const parsed = JSON.parse(text);
+      message = parsed?.error?.message || parsed?.message || parsed?.error?.status || '';
+    } catch { /* non-JSON provider body */ }
+    message = String(message || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+    if (apiKey) message = message.split(apiKey).join('***');
+    return message || fallback;
+  } catch { return fallback; }
+}
 async function requestModel(connection, input) {
   await publicEndpoint(connection.base_url);
   const request = buildProviderRequest(connection, input);
   const response = await fetch(request.url, { method: 'POST', headers: request.headers,
     body: JSON.stringify(request.body), redirect: 'manual', signal: AbortSignal.timeout(120000) });
   if (response.status >= 300 && response.status < 400) throw new Error('The AI provider redirected the request. Check the API base URL in Settings.');
-  if (!response.ok) {
-    // Provider error bodies can echo credentials and prompts. Never return them.
-    const detail = response.status === 401 || response.status === 403 ? 'Check the API key and model access.'
-      : response.status === 404 ? 'Check the API base URL and exact model ID.'
-      : response.status === 429 ? 'The provider rate limit or quota was reached.'
-      : response.status === 400 ? 'This model rejected the request format. Check JSON mode and image support in Settings.'
-      : 'The provider could not complete this request. Try again.';
-    throw new Error('AI provider returned HTTP ' + response.status + '. ' + detail);
-  }
+  if (!response.ok) throw new Error('AI provider returned HTTP ' + response.status + '. ' + await providerErrorDetail(response, connection.api_key));
   const data = await response.json();
   const content = extractContent(connection.provider, data);
   if (!content.trim()) throw new Error('The model returned no text. Choose a text generation model or adjust the request.');
