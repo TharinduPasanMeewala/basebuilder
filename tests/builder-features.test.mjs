@@ -30,7 +30,7 @@ test('Claude and Gemini use their native protocols', () => {
 });
 test('Unsupported model image input fails explicitly', () => {
   assert.throws(() => buildProviderRequest({ ...connection, supports_images: false }, { prompt: 'Hi', file_urls: ['https://example.com/image.png'] }), /image input disabled/);
-  assert.throws(() => buildProviderRequest({ ...connection, provider: 'gemini' }, { prompt: 'Hi', file_urls: ['https://example.com/image.png'] }), /Gemini connections support text/);
+  assert.throws(() => buildProviderRequest({ ...connection, provider: 'gemini' }, { prompt: 'Hi', file_urls: ['https://example.com/image.png'] }), /image bytes must be prepared/);
 });
 test('Keys are retained only for the same provider and destination', () => {
   const same = normalizeConnection({ ...connection, api_key: '' }, connection);
