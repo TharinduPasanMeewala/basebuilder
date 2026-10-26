@@ -120,7 +120,7 @@ export default async function(req) {
       if(!Array.isArray(body.parts)||body.parts.length>32||body.parts.some(part=>part.index>=archive.part_count))throw error(400,'Send at most 32 valid chunks.');
       await put(archive.id,body.parts);return Response.json({success:true});
     }
-    if(action==='finalize'){const archive=await own();if(archive.status==='ready')return Response.json({projectId:archive.project_id,archive_id:archive.id,summary:archive.summary});return Response.json(await finalize(archive));}
+    if(action==='finalize'){const archive=await own();if(archive.status==='ready')return Response.json({projectId:archive.project_id,archive_id:archive.id,summary:archive.summary});try{return Response.json(await finalize(archive));}catch(cause){await models.SourceArchive.update(archive.id,{status:'failed'}).catch(()=>{});throw cause;}}
     if(action==='github'){
       const match=String(body.repo_url||'').match(/^https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/?$/);
       if(!match)throw error(400,'Enter a public GitHub repository URL.');
