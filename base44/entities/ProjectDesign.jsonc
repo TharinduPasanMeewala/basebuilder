@@ -50,6 +50,114 @@
       ],
       "default": "comfortable",
       "title": "Density"
+    },
+    "muted_color": {
+      "type": "string"
+    },
+    "border_color": {
+      "type": "string"
+    },
+    "sidebar_color": {
+      "type": "string"
+    },
+    "sidebar_text": {
+      "type": "string"
+    },
+    "heading_font": {
+      "type": "string"
+    },
+    "hero_title": {
+      "type": "string"
+    },
+    "hero_description": {
+      "type": "string"
+    },
+    "hero_eyebrow": {
+      "type": "string"
+    },
+    "hero_cta": {
+      "type": "string"
+    },
+    "reference_summary": {
+      "type": "string"
+    },
+    "design_notes": {
+      "type": "string"
+    },
+    "app_name": {
+      "type": "string"
+    },
+    "visual_preset": {
+      "type": "string",
+      "enum": [
+        "orbit",
+        "grove",
+        "noir",
+        "atelier",
+        "mono",
+        "coral"
+      ]
+    },
+    "layout": {
+      "type": "string",
+      "enum": [
+        "sidebar",
+        "topbar"
+      ]
+    },
+    "dashboard_layout": {
+      "type": "string",
+      "enum": [
+        "analytics",
+        "workspace",
+        "editorial"
+      ]
+    },
+    "nav_width": {
+      "type": "number"
+    },
+    "content_width": {
+      "type": "number"
+    },
+    "sections": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "feature_cards": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "reference_images": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file_uri": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "width": {
+            "type": "number"
+          },
+          "height": {
+            "type": "number"
+          }
+        }
+      }
     }
   },
   "required": [
