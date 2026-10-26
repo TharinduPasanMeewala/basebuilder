@@ -8,12 +8,16 @@ import { isTextPath, safeArchivePath, excludedSourcePath } from '@/lib/standalon
 import { normalizeDomain } from '@/lib/hosting';
 import { invokeCodeAI } from '@/lib/codeAI';
 import useUnsavedChanges from '@/hooks/useUnsavedChanges';
+import DesignImagePicker from '@/components/project/DesignImagePicker';
+import {referenceUrls} from '@/lib/designReferences';
+import {DESIGN_QUALITY_PROMPT} from '@/lib/designSystem';
 
 export default function ArchiveWorkspace({ project, mode = 'editor' }) {
   const [archive,setArchive] = useState(null), [selected,setSelected] = useState(''), [draft,setDraft] = useState(''), [saved,setSaved] = useState(''), [hash,setHash] = useState('');
   const [filter,setFilter] = useState(''), [newPath,setNewPath] = useState(''), [request,setRequest] = useState(''), [target,setTarget] = useState('local'), [domain,setDomain] = useState('');
   const [busy,setBusy] = useState('load'), [error,setError] = useState(''), [notice,setNotice] = useState(''), [newFile,setNewFile] = useState(false);
   const [conflictPolicy,setConflictPolicy]=useState('error');
+  const [referenceImages,setReferenceImages]=useState([]),[uploadingReference,setUploadingReference]=useState(false);
   const sequence = useRef(0), dirty = newFile || draft !== saved;
   useUnsavedChanges(dirty);
   const refresh = async () => {
@@ -64,12 +68,13 @@ export default function ArchiveWorkspace({ project, mode = 'editor' }) {
     }catch(error){setError(error.message);}finally{setBusy('');}
   };
   const ai = async () => {
-    if(!request.trim()||!selected)return;
+    if((!request.trim()&&!referenceImages.length)||!selected||uploadingReference)return;
     if(draft.length>120000){setError('This file is too large for one AI edit. Edit it directly or split the module into smaller files first.');return;}
     setBusy('ai');setError('');setNotice('');
     try {
       const result=await invokeCodeAI({
-        prompt:'Edit the selected source file in an imported application. Preserve working functionality, imports and APIs. Modify this file only. Return exact, minimal old_text to new_text replacements. Each old_text must match a unique location unless replace_all is true. Do not invent completed changes outside this file.\nProject: '+project.name+'\nSelected file: '+selected+'\nOther paths:\n'+archive.files.slice(0,160).map(file=>file.path).join('\n')+'\nRequest: '+request+'\nComplete selected source:\n'+draft,
+        file_urls:referenceImages.length?await referenceUrls(referenceImages):undefined,
+        prompt:(referenceImages.length?DESIGN_QUALITY_PROMPT+'\nRecreate the attached design by modifying the selected source file.\n':'')+'Edit the selected source file in an imported application. Preserve working functionality, imports and APIs. Modify this file only. Return exact, minimal old_text to new_text replacements. Each old_text must match a unique location unless replace_all is true. Do not invent completed changes outside this file.\nProject: '+project.name+'\nSelected file: '+selected+'\nOther paths:\n'+archive.files.slice(0,160).map(file=>file.path).join('\n')+'\nRequest: '+request+'\nComplete selected source:\n'+draft,
         response_json_schema:{type:'object',properties:{summary:{type:'string'},edits:{type:'array',items:{type:'object',properties:{old_text:{type:'string'},new_text:{type:'string'},replace_all:{type:'boolean'}},required:['old_text','new_text']}}},required:['summary','edits']},
       });
       const next=applySourceEdits(draft,result.edits);setDraft(next);setNotice((result.summary||'AI edits prepared.')+' Review the draft, then Save file to include it in exports.');
@@ -133,7 +138,7 @@ export default function ArchiveWorkspace({ project, mode = 'editor' }) {
         {!selected?<div className="flex flex-1 items-center justify-center p-8 text-center text-sm text-muted-foreground">Select an existing source file to modify it. Backend functions, schemas and assets are preserved alongside the frontend.</div>
         :!isTextPath(selected)?<div className="p-8 text-sm text-muted-foreground">This binary asset is preserved in source and standalone ZIP downloads. Text editing is available for source files.</div>
         :<textarea aria-label={'Imported source code for '+selected} value={draft} onChange={event=>{setDraft(event.target.value);setNotice('');}} onKeyDown={keydown} disabled={!!busy} spellCheck={false} autoCapitalize="off" autoCorrect="off" wrap="off" className="flex-1 min-h-[320px] w-full resize-none bg-slate-950 text-slate-100 p-5 font-mono text-xs leading-6 outline-none focus:ring-2 focus:ring-inset focus:ring-primary/50" style={{tabSize:2}} />}
-        <div className="border-t border-border bg-card p-3 space-y-2"><label className="text-xs font-semibold flex gap-1.5 items-center"><Sparkles className="w-3.5 h-3.5 text-primary" />Modify this file with your selected AI model</label><div className="flex gap-2"><Input aria-label="Requested AI source change" placeholder="Describe the change to this file…" value={request} onChange={event=>setRequest(event.target.value)} disabled={!!busy||!selected||!isTextPath(selected)} className="text-xs" /><Button disabled={!!busy||!request.trim()||!selected||!isTextPath(selected)} onClick={ai} size="sm" className="shrink-0">{busy==='ai'?<Loader2 className="w-3.5 h-3.5 animate-spin" />:'Prepare edits'}</Button></div><p className="text-[11px] text-muted-foreground">AI changes stay in the draft until you save. Ctrl/Cmd+S saves this file. Save your draft before exporting.</p></div>
+        <div className="border-t border-border bg-card p-3 space-y-2"><details className="text-xs border border-border rounded-lg"><summary className="cursor-pointer p-2">Screenshot references ({referenceImages.length}) · modify this file from a design</summary><div className="p-3 max-h-64 overflow-auto"><DesignImagePicker images={referenceImages} onChange={setReferenceImages} disabled={!!busy} onBusy={setUploadingReference}/></div></details><label className="text-xs font-semibold flex gap-1.5 items-center"><Sparkles className="w-3.5 h-3.5 text-primary" />Modify this file with your selected AI model</label><div className="flex gap-2"><Input aria-label="Requested AI source change" placeholder="Describe the change to this file…" value={request} onChange={event=>setRequest(event.target.value)} disabled={!!busy||!selected||!isTextPath(selected)} className="text-xs" /><Button disabled={!!busy||uploadingReference||(!request.trim()&&!referenceImages.length)||!selected||!isTextPath(selected)} onClick={ai} size="sm" className="shrink-0">{busy==='ai'?<Loader2 className="w-3.5 h-3.5 animate-spin" />:'Prepare edits'}</Button></div><p className="text-[11px] text-muted-foreground">AI changes stay in the draft until you save. Ctrl/Cmd+S saves this file. Save your draft before exporting.</p></div>
       </div>
     </div>}
   </div>;
