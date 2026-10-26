@@ -113,7 +113,7 @@ test('multi-ZIP selection and standalone export include complete database backup
   const file=async(zip,name)=>{const bytes=await zip.generateAsync({type:'nodebuffer'});bytes.name=name;bytes.size=bytes.length;bytes.arrayBuffer=async()=>bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength);return bytes;};
   const source=new JSZip();source.file('package.json',packageText);source.file('base44/entities/Thing.jsonc','{"name":"Thing","properties":{}}');
   const a=new JSZip(),b=new JSZip();a.file('entities/Thing.json','[{"id":"one","title":"One"}]');b.file('entities/Thing.json','[{"id":"two","title":"Two"}]');
-  const sourceFile=await file(source,'app.zip'),first=await file(a,'part-a.zip'),second=await file(b,'part-b.zip');
+  const sourceFile=await file(source,'app.zip'),first=await file(a,'records.zip'),second=await file(b,'records.zip');assert.equal(first.size,second.size);
   const databaseOnly=await frontend.inspectImportFiles([first,second]);assert.equal(databaseOnly.source,null);const selection=await frontend.inspectImportFiles([sourceFile],databaseOnly);assert.equal(selection.backups.length,2);
   await assert.rejects(()=>frontend.inspectImportFiles([sourceFile],selection),/one application source/);
   const created=await frontend.uploadArchive(selection.source,'Multiple ZIPs'),project={id:created.projectId,name:'Multiple ZIPs'};await frontend.uploadDatabaseArchives(selection.backups,project);
