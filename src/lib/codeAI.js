@@ -8,10 +8,13 @@ export function aiError(error) { return error?.response?.data?.error || error?.m
 export async function manageAIConnection(action, data = {}) {
   try {
     const response = await base44.functions.invoke('ai-gateway', { action, ...data });
-    if (response.data?.error) throw new Error(response.data.error);
-    if (['save', 'delete', 'default'].includes(action)) resetAIPreference();
+    if (response.data?.error) throw Object.assign(new Error(response.data.error), { code: response.data.code, help_url: response.data.help_url, provider_status: response.data.provider_status });
+    if (['save', 'connect_gemini', 'delete', 'default'].includes(action)) resetAIPreference();
     return response.data;
-  } catch (error) { throw new Error(aiError(error)); }
+  } catch (error) {
+    const detail = error?.response?.data || error;
+    throw Object.assign(new Error(aiError(error)), { code: detail.code, help_url: detail.help_url, provider_status: detail.provider_status });
+  }
 }
 export async function getAIConnections(fresh = false) {
   if (!fresh && preferenceCache && Date.now() - preferenceAt < 15000) return preferenceCache;
