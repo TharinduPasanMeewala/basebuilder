@@ -7,6 +7,9 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import ImportArchiveDialog from '@/components/project/ImportArchiveDialog';
+import DesignImagePicker from '@/components/project/DesignImagePicker';
+import {DESIGN_PRESETS,normalizeDesign} from '@/lib/designSystem';
+import {generateDesignProposal,applyDesignProposal} from '@/lib/designGeneration';
 
 const PROJECT_TYPES = [
   { value: 'erp_system', label: 'ERP System', icon: '🏭', desc: 'Manufacturing, distribution, operations' },
@@ -44,11 +47,14 @@ export default function NewProject() {
     industry: '',
   });
   const [creating, setCreating] = useState(false);
+  const [images,setImages]=useState([]),[uploading,setUploading]=useState(false),[preset,setPreset]=useState('orbit'),[error,setError]=useState(''),[createdProject,setCreatedProject]=useState(null);
 
   const handleCreate = async () => {
     if (!form.name || !form.type) return;
     setCreating(true);
-    const project = await base44.entities.Project.create({
+    setError('');
+    try{
+    const project = createdProject||await base44.entities.Project.create({
       name: form.name,
       description: form.description,
       type: form.type,
@@ -58,7 +64,19 @@ export default function NewProject() {
       completeness_score: 0,
       version_count: 1,
     });
-    navigate(`/projects/${project.id}`);
+    setCreatedProject(project);
+    if(images.length){
+      const proposal=await generateDesignProposal(project,{references:images,request:form.description,preset,mode:'match'});
+      await applyDesignProposal(project,proposal,{references:images,includeModels:true});
+      await base44.entities.Project.update(project.id,{phase:'design',completeness_score:35});
+      navigate(`/projects/${project.id}?section=studio`);
+    }else{
+      const direction=DESIGN_PRESETS.find(item=>item.id===preset),design=normalizeDesign({...direction,visual_preset:preset});
+      const existing=await base44.entities.ProjectDesign.filter({project_id:project.id},'-updated_date',1);
+      if(existing[0])await base44.entities.ProjectDesign.update(existing[0].id,design);else await base44.entities.ProjectDesign.create({...design,project_id:project.id});
+      navigate(`/projects/${project.id}`);
+    }
+    }catch(error){setError(error.message);}finally{setCreating(false);}
   };
 
   const canProceed = step === 1 ? !!form.type : (!!form.name);
@@ -145,6 +163,7 @@ export default function NewProject() {
                   className="mt-1.5 resize-none h-24 text-sm"
                 />
               </div>
+              <div className="border border-border rounded-xl p-4 space-y-3"><h3 className="text-sm font-semibold">Build from a design image <span className="text-muted-foreground font-normal">(optional)</span></h3><p className="text-xs text-muted-foreground">Upload screenshots or a mockup. The AI reads its layout, typography and colors, then creates editable screens and the data models they need.</p><DesignImagePicker images={images} onChange={setImages} disabled={creating} onBusy={setUploading}/><label className="block text-xs font-medium">Visual direction<select aria-label="New project visual direction" value={preset} onChange={event=>setPreset(event.target.value)} disabled={creating} className="block w-full mt-1.5 p-2 border border-border bg-background rounded-lg text-xs">{DESIGN_PRESETS.map(item=><option value={item.id} key={item.id}>{item.name} · {item.description}</option>)}</select></label></div>
               <div>
                 <Label className="text-xs font-medium">Target Industry <span className="text-muted-foreground">(optional)</span></Label>
                 <div className="flex flex-wrap gap-1.5 mt-1.5">
@@ -166,10 +185,12 @@ export default function NewProject() {
             </div>
           )}
 
+          {error&&<p role="alert" className="text-sm text-destructive mt-4">{error}{createdProject&&<button className="underline ml-2" onClick={()=>navigate('/projects/'+createdProject.id+'?section=studio')}>Open saved project</button>}</p>}
           {/* Actions */}
           <div className="flex items-center justify-between mt-6 pt-4 border-t border-border">
             <Button
               variant="ghost"
+              disabled={creating||uploading}
               onClick={() => step === 1 ? navigate('/projects') : setStep(s => s - 1)}
               className="gap-2"
             >
@@ -178,13 +199,13 @@ export default function NewProject() {
             </Button>
             <Button
               onClick={() => step < 2 ? setStep(s => s + 1) : handleCreate()}
-              disabled={!canProceed || creating}
+              disabled={!canProceed || creating || uploading}
               className="gap-2"
             >
               {creating ? (
                 <>
                   <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-                  Creating...
+                  {images.length?'Building from your design…':'Creating…'}
                 </>
               ) : step < 2 ? (
                 <> Next <ArrowRight className="w-4 h-4" /> </>
