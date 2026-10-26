@@ -335,7 +335,7 @@ export default function LivePreviewSection({ project, initialDesignMode = false,
         }))}
       </div>
 
-      <DesignGeneratorDialog open={showDesignGenerator} onClose={()=>setShowDesignGenerator(false)} project={project} entities={entities} pages={pages} records={records} design={brandStyle} onApplied={async()=>{refreshAll();}} />
+      <DesignGeneratorDialog open={showDesignGenerator} onClose={()=>setShowDesignGenerator(false)} project={project} entities={entities} pages={pages} records={records} design={{...brandStyle,reference_images:savedDesign?.reference_images||[]}} onApplied={async()=>{refreshAll();}} />
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editingRecord ? 'Edit' : 'Add'} {selectedEntity?.display_name || selectedEntity?.name} Record</DialogTitle></DialogHeader>
