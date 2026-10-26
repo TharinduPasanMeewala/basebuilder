@@ -6,8 +6,10 @@ import PreviewElementInspector from '@/components/live-preview/PreviewElementIns
 import PreviewScreenNavigation from '@/components/live-preview/PreviewScreenNavigation';
 import RuntimePageBody from '@/components/live-preview/RuntimePageBody';
 import useVisualDesign from '@/components/live-preview/useVisualDesign';
+import {normalizeDesign,designVariables,DESIGN_CSS} from '@/lib/designSystem';
 
-export default function AppPreviewCanvas({ projectId, projectName, pages, entities, records = [], designMode = false, designSystem = {}, onCreate, onEdit, onDelete, onSave, busy }) {
+export default function AppPreviewCanvas({ projectId, projectName, projectDescription='', pages, entities, records = [], designMode = false, designSystem = {}, onCreate, onEdit, onDelete, onSave, busy }) {
+  const theme=normalizeDesign(designSystem);
   const [activeId, setActiveId] = useState(null);
   const [selected, setSelected] = useState(null);
   const [device, setDevice] = useState(0);
@@ -22,7 +24,6 @@ export default function AppPreviewCanvas({ projectId, projectName, pages, entiti
   const navigate = id => { setActiveId(id); setSelected(null); };
   const navigateEntity = entity => navigate(screens.find(page => (page.components || []).some(component => component.data_source === entity.name) || page.name.toLowerCase() === entity.name.toLowerCase())?.id);
   const header = settings(active.id + ':header');
-  const pad = { compact: 'p-3', comfortable: 'p-5', spacious: 'p-8' };
   useEffect(() => {
     if (!designMode) return;
     const keydown = event => {
@@ -55,13 +56,15 @@ export default function AppPreviewCanvas({ projectId, projectName, pages, entiti
     {layout.save.error && <p role="alert" className="text-sm text-destructive">Could not save: {layout.save.error.message}</p>}
     <div className={designMode ? 'grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_260px] gap-4' : ''}>
       <div className="min-w-0 overflow-x-auto bg-muted/40 rounded-xl p-2">
-        <div className="border border-border rounded-xl overflow-hidden mx-auto" data-preview-width={device || 'auto'} style={{ width: device || '100%', maxWidth: '100%', containerType: 'inline-size', background: designSystem.background_color, color: designSystem.text_color, fontFamily: designSystem.font_family }}>
-          <div className="border-b px-3 py-2 text-[11px] opacity-60">Interactive app preview{device ? ' · ' + device + 'px target' : ''}</div>
-          <div className="flex min-h-[480px] overflow-auto">
-            <PreviewScreenNavigation pages={screens} active={active} onNavigate={navigate} name={projectName} designSystem={{ ...designSystem, compact_navigation: device === 390 }} editProps={{ id: 'sidebar', label: 'Navigation', enabled: designMode, selectedId: selected?.id, onSelect: select, settings: settings('sidebar') }} />
-            <main className={'flex-1 min-w-0 space-y-5 ' + (device === 390 ? 'p-3' : pad[designSystem.density] || 'p-5')}>
-              <Designable {...editProps('header', 'Screen heading')}><h2 className="font-bold" style={{ fontSize: header.fontSize ? 'inherit' : '1.5rem' }}>{header.text || active.name}</h2><p className="text-sm opacity-60 mt-1">{header.description || active.description}</p></Designable>
-              <RuntimePageBody key={active.id} page={active} entities={entities} records={records} binding={header.entity_name} editProps={editProps} settings={settings} onNavigateEntity={navigateEntity} onCreate={onCreate} onEdit={onEdit} onDelete={onDelete} onSave={onSave} busy={busy} designSystem={designSystem} />
+        <div className="bb-design border border-border rounded-xl overflow-hidden mx-auto" data-layout={theme.layout} data-composition={theme.dashboard_layout} data-preview-width={device || 'auto'} style={{...designVariables(theme),width:device||'100%',maxWidth:'100%'}}>
+          <style>{DESIGN_CSS}</style>
+          <div className="bb-shell">
+            <PreviewScreenNavigation pages={screens} active={active} onNavigate={navigate} name={theme.app_name||projectName} designSystem={theme} editProps={{ id: 'sidebar', label: 'Navigation', enabled: designMode, selectedId: selected?.id, onSelect: select, settings: settings('sidebar') }} />
+            <main className="bb-main">
+              <div className="bb-topline"><span className="bb-breadcrumb">Workspace <span aria-hidden="true"> / </span><strong>{active.name}</strong></span><span className="bb-account"><span className="bb-account-label">{theme.app_name||projectName}</span><span className="bb-avatar">{(theme.app_name||projectName||'W').slice(0,1).toUpperCase()}</span></span></div>
+              <div className="bb-content"><Designable {...editProps('header', 'Screen heading')} className="bb-heading"><div><h2 style={{fontSize:header.fontSize?'inherit':undefined}}>{header.text||active.name}</h2><p>{header.description||active.description||'Your work, organized in one place.'}</p></div></Designable>
+              <RuntimePageBody key={active.id} page={active} entities={entities} records={records} binding={header.entity_name} editProps={editProps} settings={settings} onNavigateEntity={navigateEntity} onCreate={onCreate} onEdit={onEdit} onDelete={onDelete} onSave={onSave} busy={busy} designSystem={theme} projectName={projectName} projectDescription={projectDescription}/>
+              </div>
             </main>
           </div>
         </div>
