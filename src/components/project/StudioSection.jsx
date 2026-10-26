@@ -1,4 +1,5 @@
 import { invokeCodeAI } from '@/lib/codeAI';
+import {normalizeDesign,DESIGN_SCHEMA,DESIGN_QUALITY_PROMPT} from '@/lib/designSystem';
 import React, { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { MonitorPlay, RefreshCw, Code2 } from 'lucide-react';
@@ -100,7 +101,7 @@ export default function StudioSection({ project, onRefresh }) {
           applied.push(`Removed page "${a.page_name}"`);
         }
       } else if (a.action === 'set_design' && a.design) {
-        newDesign = { ...newDesign, ...a.design };
+        newDesign = { ...newDesign, ...a.design, primary_color:a.design.primary_color||a.design.primary||newDesign.primary_color,primary:a.design.primary_color||a.design.primary||newDesign.primary };
         const parts = [];
         if (a.design.app_name) parts.push(`renamed app to "${a.design.app_name}"`);
         if (a.design.primary) parts.push(`brand color → ${a.design.primary}`);
@@ -113,7 +114,7 @@ export default function StudioSection({ project, onRefresh }) {
       setDesign(newDesign);
       await persistDesign(newDesign);
       const saved = await base44.entities.ProjectDesign.filter({ project_id: project.id }, '-updated_date', 1);
-      const payload = { primary_color: newDesign.primary, project_id: project.id };
+      const payload = { ...normalizeDesign(newDesign), project_id: project.id };
       if (saved[0]) await base44.entities.ProjectDesign.update(saved[0].id, payload);
       else await base44.entities.ProjectDesign.create(payload);
     }
@@ -137,7 +138,7 @@ ${entities.map(e => `- ${e.name}: ${(e.fields || []).map(f => f.name).join(', ')
 Current pages:
 ${pages.map(p => `- ${p.name} (${p.type})`).join('\n') || '(none)'}
 
-Current design: app_name="${design.app_name || project.name}", primary color=${design.primary}, sidebar=${design.sidebar_dark ? 'dark' : 'light'}
+Current design: ${JSON.stringify(normalizeDesign(design))}
 
 User request: "${text}"
 
@@ -147,15 +148,15 @@ Decide which actions to apply. Valid actions:
 - delete_entity: entity_name
 - create_page: page_name, page_type (dashboard/list/detail/form/report/settings/kanban/calendar/chart), page_description
 - delete_page: page_name
-- set_design: design {app_name, primary (hex color), sidebar_dark (boolean)} — include only fields to change
+- set_design: design may set primary_color, accent_color, background_color, surface_color, text_color, muted_color, border_color, sidebar_color, sidebar_text, font_family, heading_font, radius, density, layout (sidebar/topbar), dashboard_layout (analytics/workspace/editorial), hero_title, hero_description, hero_cta, sections (hero/metrics/distribution/records/modules), feature_cards. Include only changed fields.
 
 Mapping rules — always act:
 - Do not create duplicate entities or pages to repair an existing button. The preview already supports record create/read/update/delete.
 - Connect new list or form pages by naming the data entity explicitly in page_description. Create only missing models and pages.
-- For screen styling or screen data connections, direct the user to Visual screen editor, select the heading or element, edit it, then Save visual edits.
+- Apply visual requests through set_design with the supported design tokens and layout. For individual element overrides or a data binding, use the visual screen editor.\n${DESIGN_QUALITY_PROMPT}
 - Actions here edit specifications, not arbitrary application code. Explain unsupported behaviors honestly; do not claim workflows or external services are implemented.
 
-${imageUrls.length > 0 ? '\nThe user attached image(s). Analyze them carefully for UI and feature ideas — entities, fields, pages, colors, app name — and turn those ideas into actions.' : ''}${roundtable ? '\nAlso include a "roundtable" array with brief one-sentence expert comments about this change from relevant agents only (Business Analyst, DB Architect, UI/UX Architect, Backend Architect, QA Architect).' : ''}
+${imageUrls.length > 0 ? '\nThe user attached image(s). Recreate their visible design: navigation placement, typography character, colors, hierarchy, panel proportions, hero copy and section order. Apply detailed set_design actions as well as any missing practical models/screens.' : ''}${roundtable ? '\nAlso include a "roundtable" array with brief one-sentence expert comments about this change from relevant agents only (Business Analyst, DB Architect, UI/UX Architect, Backend Architect, QA Architect).' : ''}
 
 Also write a short friendly reply (1-2 sentences) describing what you did.`,
         response_json_schema: {
@@ -176,7 +177,7 @@ Also write a short friendly reply (1-2 sentences) describing what you did.`,
                   page_name: { type: 'string' },
                   page_type: { type: 'string' },
                   page_description: { type: 'string' },
-                  design: { type: 'object', properties: { app_name: { type: 'string' }, primary: { type: 'string' }, sidebar_dark: { type: 'boolean' } } },
+                  design: {...DESIGN_SCHEMA,required:[],properties:{...DESIGN_SCHEMA.properties,app_name:{type:'string'},primary:{type:'string'},sidebar_dark:{type:'boolean'}}},
                 },
               },
             },
@@ -190,10 +191,11 @@ Also write a short friendly reply (1-2 sentences) describing what you did.`,
         await loadData();
         onRefresh?.();
       }
+      return true;
     } catch (e) {
       setMessages(m => [...m, { role: 'assistant', content: `Something went wrong: ${e.message}` }]);
-    }
-    setBusy(false);
+      return false;
+    }finally{setBusy(false);}
   };
 
 
