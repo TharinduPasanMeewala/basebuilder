@@ -31,7 +31,7 @@ export async function applyDesignProposal(project,proposal,{references=[],includ
     let route=/^\/[A-Za-z0-9/_-]*$/.test(page.route||'')?page.route:'/'+name.toLowerCase().replace(/[^a-z0-9]+/g,'-');if(routes.has(route))route='/'+name.toLowerCase().replace(/[^a-z0-9]+/g,'-');if(routes.has(route))continue;
     await base44.entities.PageSpec.create({project_id:project.id,name,type,route,description:cleanText(page.description,800),components:binding?[{type:type==='form'?'form':'table',name,description:cleanText(page.description,800),data_source:binding}]:[],source:'ai_generated',order_index:pages.length+created.pages});pageNames.add(key(name));routes.add(route);created.pages++;
   }
-  const design=normalizeDesign(proposal.design),payload={...design,project_id:project.id,reference_images:savedReferences(references),design_notes:cleanText(proposal.summary||design.design_notes,1800)};
+  const design=normalizeDesign({...proposal.design,app_name:proposal.design?.app_name||saved[0]?.app_name||''}),payload={...design,project_id:project.id,reference_images:savedReferences(references),design_notes:cleanText(proposal.summary||design.design_notes,1800)};
   const record=saved[0]?await base44.entities.ProjectDesign.update(saved[0].id,payload):await base44.entities.ProjectDesign.create(payload);
   const versions=await base44.entities.ProjectVersion.filter({project_id:project.id,label:'design_state'},'-created_date',1),snapshot={...design,primary:design.primary_color,app_name:design.app_name||project.name};
   if(versions[0])await base44.entities.ProjectVersion.update(versions[0].id,{snapshot});else await base44.entities.ProjectVersion.create({project_id:project.id,label:'design_state',version_number:1,notes:'Generated visual design',snapshot});
