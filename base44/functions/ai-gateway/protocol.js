@@ -11,6 +11,7 @@ export function normalizeConnection(value, existing = {}) {
   const name = String(value.name || '').trim();
   if (!name || name.length > 80) throw new Error('Enter a connection name (1–80 characters).');
   if (!model || model.length > 200 || /[\r\n]/.test(model)) throw new Error('Enter the exact model ID from your provider.');
+  if (provider === 'gemini' && !/^[a-z0-9][a-z0-9._-]*-[a-z0-9._-]+$/.test(model.replace(/^models\//, ''))) throw new Error('Enter a full Gemini model ID.');
   const base_url = provider === 'compatible' ? String(value.base_url || '').replace(/\/+$/, '') : PROVIDER_BASES[provider];
   validateEndpoint(base_url);
   const sameDestination = provider === existing.provider && base_url === existing.base_url;
@@ -46,12 +47,12 @@ export function isPrivateAddress(address) {
     (a === 198 && (b === 18 || b === 19));
 }
 
-export function buildProviderRequest(connection, { prompt, response_json_schema, file_urls = [] }) {
+export function buildProviderRequest(connection, { prompt, response_json_schema, file_urls = [], inline_images = [] }) {
   if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 180000) throw new Error('Prompt must contain 1–180,000 characters.');
   const urls = Array.isArray(file_urls) ? file_urls : [file_urls];
   if (urls.length > 6) throw new Error('Attach at most six images.');
-  if (urls.length && !connection.supports_images) throw new Error('This connection has image input disabled. Enable it in AI Settings for a vision model, or use Built-in AI.');
-  if (urls.length && connection.provider === 'gemini') throw new Error('Image attachments currently require Built-in AI, OpenAI-compatible vision, or Claude. Gemini connections support text prompts.');
+  if ((urls.length || inline_images.length) && !connection.supports_images) throw new Error('This connection has image input disabled. Enable it in AI Settings for a vision model, or use Built-in AI.');
+  if (urls.length && connection.provider === 'gemini' && inline_images.length !== urls.length) throw new Error('Gemini image bytes must be prepared before sending this request.');
   for (const url of urls) validateEndpoint(url, true);
   let text = prompt;
   if (response_json_schema) text += '\n\nReturn ONLY valid JSON matching this JSON schema. Do not use markdown fences:\n' + JSON.stringify(response_json_schema);
@@ -67,7 +68,7 @@ export function buildProviderRequest(connection, { prompt, response_json_schema,
   } else if (connection.provider === 'gemini') {
     url = base + '/models/' + encodeURIComponent(connection.model.replace(/^models\//, '')) + ':generateContent';
     headers['x-goog-api-key'] = connection.api_key;
-    body = { contents: [{ role: 'user', parts: [{ text }] }], generationConfig: {
+    body = { contents: [{ role: 'user', parts: [...inline_images.map(image => ({ inlineData: { mimeType: image.mime_type, data: image.data } })), { text }] }], generationConfig: {
       maxOutputTokens: connection.max_tokens || 8192,
       ...(response_json_schema && connection.json_mode ? { responseMimeType: 'application/json' } : {}),
     } };
