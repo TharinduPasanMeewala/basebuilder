@@ -28,17 +28,17 @@ export default function StudioSection({ project, onRefresh }) {
   const loadData = async () => {
     setLoadError('');
     try {
-    const [ents, pgs, designs] = await Promise.all([
+    const [ents, pgs, designs,styles] = await Promise.all([
       base44.entities.DataEntity.filter({ project_id: project.id }),
       base44.entities.PageSpec.filter({ project_id: project.id }),
       base44.entities.ProjectVersion.filter({ project_id: project.id, label: 'design_state' }, '-created_date', 1),
+      base44.entities.ProjectDesign.filter({project_id:project.id},'-updated_date',1),
     ]);
     setEntities(ents);
     setPages(pgs);
-    if (designs[0]) {
-      setDesign(d => ({ ...d, ...designs[0].snapshot }));
-      setDesignVersionId(designs[0].id);
-    }
+    const current=normalizeDesign({...designs[0]?.snapshot,...styles[0]});
+    setDesign({...current,primary:current.primary_color,app_name:current.app_name||designs[0]?.snapshot?.app_name||project.name});
+    setDesignVersionId(designs[0]?.id||null);
     } catch (error) { setLoadError(error.message || 'Could not load the studio.'); }
     finally { setLoading(false); }
   };
