@@ -8,7 +8,7 @@ import { AI_CONNECTION_QUERY, getAIConnections, manageAIConnection } from '@/lib
 const PRESETS = [
   { name: 'OpenAI', provider: 'openai', base_url: '', hint: 'Exact OpenAI text or vision model ID', json_mode: true },
   { name: 'Anthropic Claude', provider: 'anthropic', base_url: '', hint: 'Exact Claude model ID', json_mode: false },
-  { name: 'Google Gemini', provider: 'gemini', base_url: '', hint: 'Exact Gemini model ID (text input)', json_mode: true },
+  { name: 'Google Gemini', provider: 'gemini', base_url: '', hint: 'Exact Gemini text or vision model ID', json_mode: true },
   { name: 'OpenRouter', provider: 'compatible', base_url: 'https://openrouter.ai/api/v1', hint: 'provider/model-id', json_mode: false },
   { name: 'Custom / local model gateway', provider: 'compatible', base_url: '', hint: 'Exact model ID exposed by your endpoint', json_mode: false },
 ];
