@@ -4,18 +4,75 @@ export const PROVIDER_BASES = {
   gemini: 'https://generativelanguage.googleapis.com/v1beta',
 };
 
+export function normalizeGeminiKey(value) {
+  let key = String(value || '').trim().replace(/^(?:export\s+)?(?:GEMINI_API_KEY|GOOGLE_API_KEY)\s*=\s*/, '').trim();
+  if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) key = key.slice(1, -1).trim();
+  if (!key || key.length > 4096 || /[\s"'{}<>]/.test(key)) throw new Error('Paste the Gemini API key from Google AI Studio. Do not paste a service-account JSON file or an OAuth token.');
+  return key;
+}
+
+export function normalizeGeminiModel(value) {
+  const model = String(value || '').trim().replace(/^models\//, '');
+  if (!model || model.length > 200 || !/^[a-z0-9][a-z0-9._-]*-[a-z0-9._-]+$/.test(model)) throw new Error('Load the Gemini models and choose one, or enter its exact model ID.');
+  return model;
+}
+
+// Discover IDs from Google rather than keeping an increasingly stale preset list.
+// Only text-generating Gemini models are suitable for building apps.
+export function geminiModelChoices(values) {
+  const unique = new Map();
+  for (const value of Array.isArray(values) ? values : []) {
+    const id = String(value.name || '').replace(/^models\//, '');
+    if (!/^gemini-[a-z0-9._-]+$/.test(id) || id.length > 200 ||
+        !value.supportedGenerationMethods?.includes('generateContent') ||
+        /(?:^|-)(?:image|tts|audio|live|robotics|computer-use)(?:-|$)/.test(id)) continue;
+    unique.set(id, { id, name: String(value.displayName || id).slice(0, 128),
+      description: String(value.description || '').slice(0, 500),
+      output_token_limit: Number(value.outputTokenLimit) > 0 ? Math.floor(Number(value.outputTokenLimit)) : null });
+  }
+  const experimental = id => /(?:^|-)(preview|exp|experimental)(?:-|$)/.test(id) ? 1 : 0;
+  const version = id => id.match(/^gemini-(\d+(?:\.\d+)?)/)?.[1] || '0';
+  const tier = id => /flash(?!-lite)/.test(id) ? 0 : /pro/.test(id) ? 1 : 2;
+  return [...unique.values()].sort((a, b) => experimental(a.id) - experimental(b.id) || version(b.id).localeCompare(version(a.id), undefined, { numeric: true }) || tier(a.id) - tier(b.id) || b.id.localeCompare(a.id, undefined, { numeric: true }));
+}
+
+export function describeProviderError(provider, status, data, apiKey = '') {
+  let detail = String(data?.error?.message || data?.message || data?.error?.status || '').replace(/\s+/g, ' ').trim();
+  if (apiKey) detail = detail.split(apiKey).join('[hidden]');
+  detail = detail.slice(0, 350);
+  const base = { code: 'PROVIDER_ERROR', provider_status: status };
+  if (provider !== 'gemini') return { ...base, message: 'AI provider returned HTTP ' + status + '. ' + (detail || 'Check your key, model access, and provider quota.') };
+  const keyHelp = 'https://aistudio.google.com/apikey';
+  const modelHelp = 'https://ai.google.dev/gemini-api/docs/models';
+  const quotaHelp = 'https://ai.google.dev/gemini-api/docs/rate-limits';
+  const keyIssue = /api.?key.*(?:invalid|expired|blocked|leaked|unrestricted|not valid|not found)|(?:invalid|expired|blocked|leaked).*api.?key|API_KEY_INVALID|API_KEY_EXPIRED/i.test(detail);
+  const billingIssue = /billing|prepay|credit|free tier.*(?:not available|not supported)|quota.*(?:limit[: ]+0|limit of 0)/i.test(detail);
+  let code, message, help_url;
+  if (status === 401 || keyIssue) { code = 'GEMINI_KEY_INVALID'; message = 'Google rejected this API key. Create or copy an active Gemini API key in Google AI Studio, then try again.'; help_url = keyHelp; }
+  else if (/location.*not supported|region.*not (?:available|supported)|country.*not supported/i.test(detail)) { code = 'GEMINI_REGION'; message = 'Google reports that the Gemini API is unavailable for this request’s location. Check Google’s supported regions and project availability.'; help_url = 'https://ai.google.dev/gemini-api/docs/available-regions'; }
+  else if (/SERVICE_DISABLED|api.*(?:has not been used|is disabled|not enabled)/i.test(detail)) { code = 'GEMINI_API_DISABLED'; message = 'Enable the Generative Language API for this key’s Google Cloud project, then retry. Google AI Studio can help create a key in the correct project.'; help_url = keyHelp; }
+  else if (/referer|referrer|ip address.*(?:blocked|not allowed)|application restriction/i.test(detail)) { code = 'GEMINI_KEY_RESTRICTIONS'; message = 'This key’s application restrictions do not allow the builder’s server request. Check its API and application restrictions, or create a Gemini API key in Google AI Studio.'; help_url = keyHelp; }
+  else if (status === 402 || billingIssue) { code = 'GEMINI_BILLING'; message = 'This Google project has no available API quota or credits for this request. Check its plan, billing, and model quota in Google AI Studio.'; help_url = quotaHelp; }
+  else if (status === 403) { code = 'GEMINI_ACCESS_DENIED'; message = 'Google denied access. Check the key’s project permissions, API restrictions, and Gemini API access in Google AI Studio.'; help_url = keyHelp; }
+  else if (status === 404) { code = 'GEMINI_MODEL_UNAVAILABLE'; message = 'This Gemini model is unavailable for this key or API. Load models again and choose a current text model, then reconnect.'; help_url = modelHelp; }
+  else if (status === 429) { code = 'GEMINI_QUOTA'; message = 'Google’s API rate limit or quota was reached. Wait and retry, choose another available model, or check this project’s quota.'; help_url = quotaHelp; }
+  else if (status === 400) { code = 'GEMINI_REQUEST'; message = 'Google rejected this model’s request settings. Try another text model, or turn off image input in Advanced options if this model is text-only.'; help_url = 'https://ai.google.dev/gemini-api/docs/troubleshooting'; }
+  else { code = 'GEMINI_UNAVAILABLE'; message = 'Google could not complete the connection. Try again shortly.'; help_url = 'https://ai.google.dev/gemini-api/docs/troubleshooting'; }
+  return { ...base, code, help_url, message: message + (detail ? ' Google: ' + detail : '') };
+}
+
 export function normalizeConnection(value, existing = {}) {
   const provider = value.provider || existing.provider;
   if (!['openai', 'anthropic', 'gemini', 'compatible'].includes(provider)) throw new Error('Choose a supported API protocol.');
-  const model = String(value.model || '').trim();
+  const model = provider === 'gemini' ? normalizeGeminiModel(value.model) : String(value.model || '').trim();
   const name = String(value.name || '').trim();
   if (!name || name.length > 80) throw new Error('Enter a connection name (1–80 characters).');
   if (!model || model.length > 200 || /[\r\n]/.test(model)) throw new Error('Enter the exact model ID from your provider.');
-  if (provider === 'gemini' && !/^[a-z0-9][a-z0-9._-]*-[a-z0-9._-]+$/.test(model.replace(/^models\//, ''))) throw new Error('Enter a full Gemini model ID.');
   const base_url = provider === 'compatible' ? String(value.base_url || '').replace(/\/+$/, '') : PROVIDER_BASES[provider];
   validateEndpoint(base_url);
   const sameDestination = provider === existing.provider && base_url === existing.base_url;
-  const api_key = typeof value.api_key === 'string' && value.api_key.trim() ? value.api_key.trim() : (sameDestination ? existing.api_key || '' : '');
+  let api_key = typeof value.api_key === 'string' && value.api_key.trim() ? value.api_key.trim() : (sameDestination ? existing.api_key || '' : '');
+  if (provider === 'gemini') api_key = normalizeGeminiKey(api_key);
   if (provider !== 'compatible' && !api_key) throw new Error('An API key is required for this provider.');
   return { name, provider, model, base_url, api_key,
     json_mode: !!value.json_mode, supports_images: !!value.supports_images,
