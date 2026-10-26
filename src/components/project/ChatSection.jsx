@@ -1,4 +1,7 @@
 import { invokeCodeAI } from '@/lib/codeAI';
+import {normalizeDesign,DESIGN_SCHEMA,DESIGN_QUALITY_PROMPT} from '@/lib/designSystem';
+import {uploadDesignReference,referenceUrls,MAX_DESIGN_IMAGES} from '@/lib/designReferences';
+import {useQueryClient} from '@tanstack/react-query';
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, Sparkles, FileText, Users, ChevronDown, Image, Link, X } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
@@ -149,7 +152,7 @@ Your role: Review the ENTIRE specification across all agents — find gaps, inco
   };
 
   const prompt = basePrompt[agentType] || basePrompt.business_analyst;
-  return prompt + (crossAgentContext || '');
+  return prompt + (agentType==='ui_ux_architect'?'\n'+DESIGN_QUALITY_PROMPT:'') + (crossAgentContext || '');
 }
 
 async function extractRequirementsInBackground(project, userMsg, assistantMsg) {
@@ -211,24 +214,25 @@ Return only CONCRETE, ACTIONABLE requirements. Empty array if none.`,
   }
 }
 
-async function extractVisualSpecsInBackground(project, userMsg, assistantMsg, fileUrls) {
+async function extractVisualSpecsInBackground(project, userMsg, assistantMsg, fileUrls,cache) {
   if (!fileUrls?.length) return { entities: 0, pages: 0 };
   try {
     const result = await invokeCodeAI({
-      prompt: `Visual product analysis engine. Analyze the attached screenshot, wireframe, sketch, or UI reference and convert it into Sara Builder AI project specs.
+      prompt: `${DESIGN_QUALITY_PROMPT}\nVisual product analysis engine. Analyze the attached screenshot, wireframe, sketch, or UI reference and convert it into Sara Builder AI project specs.
 PROJECT: "${project.name}" (${project.type?.replace(/_/g, ' ')})
 USER REQUEST: ${userMsg}
 AGENT RESPONSE: ${assistantMsg}
 
 Extract only what is visible or strongly implied by the image:
 1. Data entities needed to power the UI, with fields and relationships.
-2. UI pages/screens represented by the image.
+2. UI pages/screens represented by the image.\n3. A detailed design object that recreates the navigation, palette, spacing, typography hierarchy, hero composition and section order. Keep existing data and working screens.
 
 Return practical specs that can be saved directly. Avoid duplicates and generic filler.`,
       file_urls: fileUrls,
       response_json_schema: {
         type: 'object',
         properties: {
+          design:DESIGN_SCHEMA,
           entities: {
             type: 'array',
             items: {
@@ -318,11 +322,12 @@ Return practical specs that can be saved directly. Avoid duplicates and generic 
       });
     }
 
+    if(result.design){const styles=await base44.entities.ProjectDesign.filter({project_id:project.id},'-updated_date',1);const payload={...normalizeDesign(result.design),project_id:project.id};if(styles[0])await base44.entities.ProjectDesign.update(styles[0].id,payload);else await base44.entities.ProjectDesign.create(payload);await cache?.invalidateQueries({queryKey:['projectDesign',project.id]});}
     if (newEntities.length > 0 || newPages.length > 0) {
       await base44.entities.Project.update(project.id, { phase: 'design', completeness_score: Math.max(project.completeness_score || 0, 50) });
     }
 
-    return { entities: newEntities.length, pages: newPages.length };
+    return { entities: newEntities.length, pages: newPages.length, design:!!result.design };
   } catch (e) {
     console.warn('Background visual spec extraction failed:', e);
     return { entities: 0, pages: 0 };
@@ -330,6 +335,7 @@ Return practical specs that can be saved directly. Avoid duplicates and generic 
 }
 
 export default function ChatSection({ project, onRefresh }) {
+  const cache=useQueryClient();
   const [conversation, setConversation] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -400,11 +406,10 @@ export default function ChatSection({ project, onRefresh }) {
   const handleImageUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if(attachments.filter(item=>item.type==='image').length>=MAX_DESIGN_IMAGES){toast({title:'Use up to four image references',variant:'destructive'});return;}
     setUploading(true);
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
-    setAttachments(a => [...a, { type: 'image', url: file_url, name: file.name }]);
-    setUploading(false);
-    e.target.value = '';
+    try{const image=await uploadDesignReference(file);setAttachments(previous=>[...previous,{...image,type:'image',url:image.preview_url}]);}
+    catch(error){toast({title:'Image upload failed',description:error.message,variant:'destructive'});}finally{setUploading(false);e.target.value='';}
   };
 
   const addUrl = () => {
@@ -420,7 +425,9 @@ export default function ChatSection({ project, onRefresh }) {
   const sendMessage = async () => {
     if ((!input.trim() && attachments.length === 0) || sending || !conversation) return;
 
-    const fileUrls = attachments.map(a => a.url);
+    setSending(true);
+    try{
+    let fileUrls;try{fileUrls=await Promise.all(attachments.map(async item=>item.file_uri?(await referenceUrls([item]))[0]:item.url));}catch(error){toast({title:'Could not read an image',description:error.message,variant:'destructive'});setSending(false);return;}
     const attachmentDesc = attachments.length > 0
       ? `\n[Attachments: ${attachments.map(a => `${a.type === 'image' ? '🖼 Image' : '🔗 URL'}: ${a.name}`).join(', ')}]`
       : '';
@@ -482,10 +489,10 @@ Respond as ${AGENT_NAMES[activeAgent]}. Be professional, specific, and reference
     setExtracting(true);
     Promise.all([
       extractRequirementsInBackground(projectRef.current, userMsg.content, response),
-      extractVisualSpecsInBackground(projectRef.current, userMsg.content, response, fileUrls),
+      extractVisualSpecsInBackground(projectRef.current, userMsg.content, response, fileUrls,cache),
     ])
       .then(([reqCount, visual]) => {
-        if (reqCount > 0 || visual.entities > 0 || visual.pages > 0) {
+        if (reqCount > 0 || visual.entities > 0 || visual.pages > 0 || visual.design) {
           toast({
             title: 'AI specs captured',
             description: `${reqCount} requirement${reqCount === 1 ? '' : 's'}, ${visual.entities} data model${visual.entities === 1 ? '' : 's'}, ${visual.pages} UI page${visual.pages === 1 ? '' : 's'} created.`,
@@ -495,6 +502,8 @@ Respond as ${AGENT_NAMES[activeAgent]}. Be professional, specific, and reference
         }
       })
       .finally(() => setExtracting(false));
+    }catch(error){toast({title:'AI request failed',description:error.message,variant:'destructive'});setInput(input);setAttachments(attachments);}
+    finally{setSending(false);}
   };
 
   // Ask another agent to chime in on the last message
@@ -676,7 +685,7 @@ As ${AGENT_NAMES[agentType]}, add your perspective on the discussion above. Refe
         <div className="flex gap-2 items-end">
           {/* Attach buttons */}
           <div className="flex gap-1 flex-shrink-0">
-            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+            <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleImageUpload} />
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading || sending}
