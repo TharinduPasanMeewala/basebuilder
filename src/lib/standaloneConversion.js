@@ -57,8 +57,9 @@ export function convertStandalone(sourceFiles, templates, options = {}) {
   }
   pkg.engines = { ...pkg.engines, node: '>=24.12 <25' };
   pkg.scripts = { ...pkg.scripts, dev: 'node --env-file-if-exists=.env standalone/server/dev.mjs', 'dev:frontend': 'vite --host 127.0.0.1',
-    start: 'node --env-file-if-exists=.env standalone/server/index.mjs', build: 'vite build', 'test:standalone': 'node --test standalone/tests/*.test.mjs' };
-  pkg.dependencies ||= {}; pkg.dependencies.ws = '^8.18.3';
+    start: 'node --env-file-if-exists=.env standalone/server/index.mjs', build: 'vite build', 'test:standalone': 'node --test standalone/tests/*.test.mjs',
+    'db:restore':'node --env-file-if-exists=.env standalone/server/restore.mjs','db:inspect':'node --env-file-if-exists=.env standalone/server/restore.mjs --check' };
+  pkg.dependencies ||= {}; pkg.dependencies.ws = '^8.18.3'; pkg.dependencies.jszip ||= '^3.10.1';
   for (const [path, content] of files) {
     if (typeof content !== 'string') continue;
     let next = content;
@@ -120,7 +121,7 @@ export function convertStandalone(sourceFiles, templates, options = {}) {
   }
   if (files.has('README.md')) files.set('migration/original-README.md', files.get('README.md'));
   for (const file of templates) files.set(file.path, file.content);
-  files.set('README.md', '# Standalone application\n\nStart with [STANDALONE.md](STANDALONE.md) for localhost, custom-domain hosting, accounts, database imports and integration configuration. Use Node.js 24.12 or newer within the 24 series.\n\n```sh\nnpm install\ncp .env.example .env\n# Set ADMIN_EMAIL and ADMIN_PASSWORD in .env\nnpm run build\nnpm start\n```\n\nOpen http://localhost:3000. Source files do not include hosted database records or passwords. Migration details are in `migration/report.json`. The original README is preserved under `migration/`.\n');
+  files.set('README.md', '# Standalone application\n\nStart with [STANDALONE.md](STANDALONE.md) for localhost, custom-domain hosting, accounts, database imports and integration configuration. Use Node.js 24.12 or newer within the 24 series.\n\n```sh\nnpm install\ncp .env.example .env\n# Set ADMIN_EMAIL and ADMIN_PASSWORD in .env\n# If database ZIPs are included, restore them before starting the server:\n# npm run db:restore\nnpm run build\nnpm start\n```\n\nOpen http://localhost:3000. Attached database ZIPs are listed in `migration/backups.json`; restore them with `npm run db:restore` while the server is stopped. Account passwords and binary uploads need separate migration. Migration details are in `migration/report.json`. The original README is preserved under `migration/`.\n');
   if (!source.entities.length) files.set('base44/entities/.gitkeep', '');
   files.set('migration/original-package.json', originalPackage);
   if (files.has('vite.config.js')) files.set('migration/original-vite.config.txt', files.get('vite.config.js'));
@@ -145,7 +146,7 @@ export function convertStandalone(sourceFiles, templates, options = {}) {
     'COPY --from=build --chown=node:node /app/standalone ./standalone','RUN mkdir -p /app/data && chown node:node /app/data','USER node','EXPOSE 3000','CMD ["node","standalone/server/index.mjs"]','',
   ].join('\n'));
   files.set('compose.yaml', [
-    'services:','  app:','    build: .','    env_file: .env','    environment:','      HOST: 0.0.0.0','    ports:','      - "127.0.0.1:3000:3000"','    volumes:','      - app_data:/app/data','    restart: unless-stopped',
+    'services:','  app:','    build: .','    env_file: .env','    environment:','      HOST: 0.0.0.0','    ports:','      - "127.0.0.1:3000:3000"','    volumes:','      - app_data:/app/data','      - ./migration:/app/migration:ro','    restart: unless-stopped',
     '  caddy:','    image: caddy:2-alpine','    profiles: ["domain"]','    depends_on: [app]','    ports:','      - "80:80"','      - "443:443"','      - "443:443/udp"',
     '    volumes:','      - ./standalone/Caddyfile:/etc/caddy/Caddyfile:ro','      - caddy_data:/data','      - caddy_config:/config','    restart: unless-stopped',
     'volumes:','  app_data:','  caddy_data:','  caddy_config:','',
