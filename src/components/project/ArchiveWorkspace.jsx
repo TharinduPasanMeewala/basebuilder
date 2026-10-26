@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { FileCode, Save, Download, Loader2, Search, Plus, RotateCcw, Trash2, Sparkles, Database, Server, Package, Globe, Monitor } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { archiveCall, downloadArchiveBlob, standaloneArchive, saveDownload, applySourceEdits } from '@/lib/sourceArchives';
+import { archiveCall, downloadArchiveBlob, standaloneArchive, saveDownload, applySourceEdits, inspectDatabaseFile, uploadDatabaseArchives } from '@/lib/sourceArchives';
+import DatabaseBackups from '@/components/project/DatabaseBackups';
 import { isTextPath, safeArchivePath, excludedSourcePath } from '@/lib/standaloneConversion';
 import { normalizeDomain } from '@/lib/hosting';
 import { invokeCodeAI } from '@/lib/codeAI';
@@ -12,6 +13,7 @@ export default function ArchiveWorkspace({ project, mode = 'editor' }) {
   const [archive,setArchive] = useState(null), [selected,setSelected] = useState(''), [draft,setDraft] = useState(''), [saved,setSaved] = useState(''), [hash,setHash] = useState('');
   const [filter,setFilter] = useState(''), [newPath,setNewPath] = useState(''), [request,setRequest] = useState(''), [target,setTarget] = useState('local'), [domain,setDomain] = useState('');
   const [busy,setBusy] = useState('load'), [error,setError] = useState(''), [notice,setNotice] = useState(''), [newFile,setNewFile] = useState(false);
+  const [conflictPolicy,setConflictPolicy]=useState('error');
   const sequence = useRef(0), dirty = newFile || draft !== saved;
   useUnsavedChanges(dirty);
   const refresh = async () => {
@@ -80,11 +82,20 @@ export default function ArchiveWorkspace({ project, mode = 'editor' }) {
       if(standalone){
         const hostname=target==='domain'?normalizeDomain(domain):'';
         if(target==='domain'&&!hostname)throw new Error('Enter the domain you want to use.');
-        const result=await standaloneArchive(project,hostname,message=>setNotice(message));
+        const result=await standaloneArchive(project,hostname,message=>setNotice(message),{conflictPolicy});
         saveDownload(result.blob,slug+'-standalone.zip');
-        setNotice('Standalone package prepared: '+result.report.entity_schemas+' schemas, '+result.report.backend_functions+' functions, and an independent Node.js + SQLite runtime. Follow STANDALONE.md to configure accounts, import live data and connect services.');
+        setNotice('Standalone package prepared: '+result.report.entity_schemas+' schemas, '+result.report.backend_functions+' functions'+(result.report.database_backups?.length?', '+result.report.database_backups.length+' database ZIP(s)':'')+', and an independent Node.js + SQLite runtime. Follow STANDALONE.md and run npm run db:restore for included database backups.');
       }else{saveDownload(await downloadArchiveBlob(project.id),slug+'-source.zip');setNotice('Complete saved source ZIP downloaded, including binary assets.');}
     }catch(error){setError(error.message);}finally{setBusy('');}
+  };
+  const attachBackups=async files=>{
+    if(!files.length)return;setBusy('backup');setError('');setNotice('Inspecting database ZIPs…');
+    try{if((archive?.backups?.length||0)+files.length>7)throw new Error('Attach up to 7 database ZIPs per project.');const backups=[];for(const file of files)backups.push(await inspectDatabaseFile(file));await uploadDatabaseArchives(backups,project,message=>setNotice(message));await refresh();setNotice('Database ZIPs attached. Standalone downloads include these backups and the restore command.');}
+    catch(error){setError(error.message);await refresh().catch(()=>{});}finally{setBusy('');}
+  };
+  const removeBackup=async backup=>{
+    if(!window.confirm('Remove '+backup.filename+' from future standalone exports?'))return;setBusy('backup');setError('');
+    try{await archiveCall('remove_backup',{project_id:project.id,backup_id:backup.id});await refresh();setNotice('Database backup removed from future exports.');}catch(error){setError(error.message);}finally{setBusy('');}
   };
   const keydown=event=>{
     if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='s'){event.preventDefault();save();}
@@ -106,10 +117,11 @@ export default function ArchiveWorkspace({ project, mode = 'editor' }) {
     </div>
     {error&&<p role="alert" className="p-3 text-sm text-destructive border-b border-border">{error}{!archive&&<Button size="sm" variant="outline" className="ml-3" onClick={()=>refresh().catch(error=>setError(error.message))}>Retry</Button>}</p>}
     {notice&&<p role="status" className="p-3 text-xs text-primary border-b border-border">{notice}</p>}
+    <DatabaseBackups backups={archive?.backups||[]} disabled={!!busy||dirty||!archive} onAdd={attachBackups} onRemove={removeBackup} conflictPolicy={conflictPolicy} onPolicy={setConflictPolicy} />
     {mode==='hosting'?<div className="flex-1 overflow-auto p-6 space-y-5">
       <div className="rounded-2xl border border-primary/20 bg-primary/5 p-6"><div className="flex items-center gap-2 text-primary"><Database className="w-5 h-5" /><h3 className="font-semibold">An independent application backend</h3></div><p className="text-sm text-muted-foreground mt-3 leading-relaxed">For Base44 React/Vite projects, the standalone exporter keeps existing pages, models and backend functions, replaces the platform SDK with a local compatibility layer, and adds Node.js, persistent SQLite, local accounts, file storage, AI-provider adapters and a realtime-room server.</p></div>
       <div className="grid md:grid-cols-2 gap-4"><div className="rounded-xl border border-border p-5"><h3 className="font-semibold text-sm mb-3">Run on localhost</h3><pre className="text-xs bg-slate-950 text-slate-100 p-4 rounded-lg overflow-auto">{'npm install\n# Copy .env.example to .env and set admin credentials\nnpm run build\nnpm start'}</pre><p className="text-xs text-muted-foreground mt-3">Open http://localhost:3000. The database and uploaded files live in the app’s data directory.</p></div><div className="rounded-xl border border-border p-5"><h3 className="font-semibold text-sm mb-3">Host on your domain</h3><pre className="text-xs bg-slate-950 text-slate-100 p-4 rounded-lg overflow-auto">{'docker compose --profile domain up --build -d'}</pre><p className="text-xs text-muted-foreground mt-3">Point DNS to your server, configure PUBLIC_URL and the Caddy hostname, then open ports 80 and 443. Docker volumes preserve the database, uploads and HTTPS certificates.</p></div></div>
-      <div className="rounded-xl border border-border p-5 text-sm text-muted-foreground leading-relaxed"><h3 className="font-semibold text-foreground mb-2">Migration requirements</h3>Source ZIPs do not transfer live database records, existing passwords, OAuth connections or service credentials. Create standalone accounts, import a data export, and configure integrations in the server environment. Migration reports identify removed hard-coded credentials and required settings. Run the included build and runtime tests before deployment.</div>
+      <div className="rounded-xl border border-border p-5 text-sm text-muted-foreground leading-relaxed"><h3 className="font-semibold text-foreground mb-2">Restore attached database ZIPs</h3>Choose Add database ZIPs above, then download the standalone package. After npm install, stop the app server and run <code>npm run db:restore</code> to import every included backup. Identical records are deduplicated; conflicting records stop the whole import unless you explicitly choose newest-record resolution. Existing account passwords, OAuth authorization and binary uploads are separate. Review the restore report and configure integrations before deployment.</div>
     </div>:<div className="flex flex-col md:flex-row flex-1 min-h-0">
       <aside className="w-full md:w-64 flex flex-col max-h-48 md:max-h-none border-b md:border-b-0 md:border-r border-border bg-card shrink-0">
         <div className="p-3 relative"><Search className="w-3.5 h-3.5 absolute left-5 top-6 text-muted-foreground" /><Input aria-label="Find imported source file" placeholder="Find a file…" value={filter} onChange={event=>setFilter(event.target.value)} className="h-9 text-xs pl-7" /></div>
