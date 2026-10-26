@@ -39,14 +39,15 @@ async function prepareGeminiImages(connection,values) {
     await publicEndpoint(url,true);
     const response=await fetch(url,{redirect:'manual',signal:AbortSignal.timeout(20000)});
     if(!response.ok)throw new Error('The reference image could not be opened. Upload it again; temporary image links may have expired.');
-    const mime=(response.headers.get('content-type')||'').split(';')[0].trim();
-    if(!['image/png','image/jpeg','image/webp'].includes(mime))throw new Error('Gemini references must be PNG, JPG or WebP images.');
+    let mime=(response.headers.get('content-type')||'').split(';')[0].trim().toLowerCase();
+    if(!['image/png','image/jpeg','image/webp','application/octet-stream'].includes(mime))throw new Error('Gemini references must be PNG, JPG or WebP images.');
     if(Number(response.headers.get('content-length'))>4*1024*1024)throw new Error('Optimize or crop this image to less than 4 MB.');
     const reader=response.body.getReader(),chunks=[];let size=0;
     try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;total+=value.length;if(size>4*1024*1024||total>12*1024*1024)throw new Error('Use fewer or smaller references (4 MB per image, 12 MB total).');chunks.push(value);}}finally{await reader.cancel();}
     const bytes=new Uint8Array(size);let at=0;for(const chunk of chunks){bytes.set(chunk,at);at+=chunk.length;}
-    const valid=mime==='image/png'?[137,80,78,71,13,10,26,10].every((n,i)=>bytes[i]===n):mime==='image/jpeg'?bytes[0]===255&&bytes[1]===216&&bytes[2]===255:new TextDecoder().decode(bytes.slice(0,4))==='RIFF'&&new TextDecoder().decode(bytes.slice(8,12))==='WEBP';
-    if(!valid)throw new Error('The uploaded image does not match its file type. Export a fresh PNG or JPG.');
+    const detected=[137,80,78,71,13,10,26,10].every((n,i)=>bytes[i]===n)?'image/png':bytes[0]===255&&bytes[1]===216&&bytes[2]===255?'image/jpeg':new TextDecoder().decode(bytes.slice(0,4))==='RIFF'&&new TextDecoder().decode(bytes.slice(8,12))==='WEBP'?'image/webp':'';
+    if(!detected||(mime!=='application/octet-stream'&&detected!==mime))throw new Error('The uploaded image does not match its file type. Export a fresh PNG or JPG.');
+    mime=detected;
     let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));images.push({mime_type:mime,data:btoa(binary)});
   }
   return images;
