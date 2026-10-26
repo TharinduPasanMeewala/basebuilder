@@ -4,6 +4,7 @@ import { Cpu, Plus, Save, Loader2, CheckCircle2, Trash2, Shield, Key, ArrowRight
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { AI_CONNECTION_QUERY, getAIConnections, manageAIConnection } from '@/lib/codeAI';
+import GeminiConnect from '@/components/settings/GeminiConnect';
 
 const PRESETS = [
   { name: 'OpenAI', provider: 'openai', base_url: '', hint: 'Exact OpenAI text or vision model ID', json_mode: true },
@@ -13,17 +14,18 @@ const PRESETS = [
   { name: 'Custom / local model gateway', provider: 'compatible', base_url: '', hint: 'Exact model ID exposed by your endpoint', json_mode: false },
 ];
 const EMPTY = { name: '', provider: 'openai', model: '', base_url: '', api_key: '', json_mode: true, supports_images: false, max_tokens: 8192 };
+const GEMINI_START = { ...EMPTY, name: 'Google Gemini', provider: 'gemini', supports_images: true };
 const MODEL_SUGGESTIONS = {
   openai: ['gpt-5', 'gpt-5-mini', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-4o', 'gpt-4o-mini'],
   anthropic: ['claude-sonnet-4-5', 'claude-opus-4-1', 'claude-3-7-sonnet-latest', 'claude-3-5-haiku-latest'],
-  gemini: ['gemini-3.8-flash'],
 };
 
 export default function Settings() {
   const queryClient = useQueryClient();
   const query = useQuery({ queryKey: AI_CONNECTION_QUERY, queryFn: () => getAIConnections(true), retry: 1 });
-  const [form, setForm] = useState(EMPTY);
+  const [form, setForm] = useState(GEMINI_START);
   const [editing, setEditing] = useState(null);
+  const [editorSession, setEditorSession] = useState(0);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -36,7 +38,7 @@ export default function Settings() {
     finally { setBusy(''); }
   };
   const edit = record => {
-    setEditing(record.id); setForm({ ...EMPTY, ...record, api_key: '' });
+    setEditorSession(value => value + 1); setEditing(record.id); setForm({ ...EMPTY, ...record, api_key: '' });
     setMakeDefault(query.data?.default_id === record.id); setError(''); setNotice('');
   };
   const save = event => {
@@ -51,7 +53,7 @@ export default function Settings() {
   return <div className="w-full overflow-y-auto">
     <div className="max-w-6xl mx-auto p-4 sm:p-8 space-y-6">
       <div className="flex items-start justify-between gap-4">
-        <div><div className="flex items-center gap-2 text-primary text-xs font-semibold uppercase tracking-widest mb-2"><Cpu className="w-4 h-4" /> AI connections</div><h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Choose the intelligence behind your builder</h1><p className="text-muted-foreground text-sm mt-2 max-w-2xl">Connect a provider, enter any available model ID, and use it across planning, chat, UI design, and code generation.</p></div>
+        <div><div className="flex items-center gap-2 text-primary text-xs font-semibold uppercase tracking-widest mb-2"><Cpu className="w-4 h-4" /> AI connections</div><h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Choose the intelligence behind your builder</h1><p className="text-muted-foreground text-sm mt-2 max-w-2xl">Connect your AI provider and use it across planning, chat, UI design, and code generation. Gemini setup discovers models and tests access for you.</p></div>
       </div>
       {(error || query.error) && <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{error || query.error.message}<Button variant="ghost" size="sm" onClick={() => query.refetch()}>Retry</Button></div>}
       {notice && <div role="status" className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 text-sm flex gap-2"><CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />{notice}</div>}
@@ -63,7 +65,7 @@ export default function Settings() {
           </button>
           {query.isLoading && <p className="text-sm p-4 flex gap-2"><Loader2 className="w-4 h-4 animate-spin" />Loading connections…</p>}
           {connections.map(record => <div key={record.id} className={'rounded-xl border p-4 bg-card ' + (editing === record.id ? 'border-primary' : 'border-border')}>
-            <div className="flex items-start gap-2"><button onClick={() => edit(record)} className="text-left flex-1 min-w-0"><p className="font-semibold text-sm truncate">{record.name}</p><p className="text-xs text-muted-foreground font-mono mt-1 break-all">{record.model}</p></button>{query.data?.default_id === record.id && <span className="text-[10px] text-primary font-semibold">DEFAULT</span>}</div>
+            <div className="flex items-start gap-2"><button disabled={!!busy} onClick={() => edit(record)} className="text-left flex-1 min-w-0"><p className="font-semibold text-sm truncate">{record.name}</p><p className="text-xs text-muted-foreground font-mono mt-1 break-all">{record.model}</p></button>{query.data?.default_id === record.id && <span className="text-[10px] text-primary font-semibold">DEFAULT</span>}</div>
             <div className="flex items-center gap-2 mt-3"><Button variant="outline" size="sm" disabled={!!busy} onClick={() => run(record.id, async () => {
               const result = await manageAIConnection('test', { id: record.id }); setNotice('Connected to ' + result.model + ' in ' + (result.latency_ms / 1000).toFixed(1) + 's.');
             })}>{busy === record.id ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Test connection'}</Button>
@@ -74,16 +76,24 @@ export default function Settings() {
               }}><Trash2 className="w-3.5 h-3.5" /></Button>
             </div>
             {record.last_test_ok && <p className="text-[11px] text-emerald-600 mt-2">Last successful test: {new Date(record.last_tested_at).toLocaleString()}</p>}
+            {record.last_tested_at && !record.last_test_ok && <p className="text-[11px] text-destructive mt-2">Last check failed. Open this connection to update it and retry.</p>}
           </div>)}
-          <Button className="w-full gap-2" variant="outline" onClick={() => { setEditing(null); setForm(EMPTY); setMakeDefault(true); setNotice(''); }}><Plus className="w-4 h-4" />Add connection</Button>
+          <Button className="w-full gap-2" variant="outline" disabled={!!busy} onClick={() => { setEditorSession(value => value + 1); setEditing(null); setForm(GEMINI_START); setMakeDefault(true); setError(''); setNotice(''); }}><Plus className="w-4 h-4" />Add connection</Button>
           <div className="rounded-xl bg-muted/40 p-4 text-xs text-muted-foreground leading-relaxed flex gap-2"><Shield className="w-4 h-4 shrink-0 text-primary" /><p>Saved keys are held in server-only records. The builder receives connection details without keys. Keys are excluded from generated code and deployment packages.</p></div>
         </div>
-        <form onSubmit={save} className="rounded-2xl border border-border bg-card p-5 sm:p-6 space-y-5 self-start">
-          <div className="border-b border-border pb-4"><h2 className="text-lg font-semibold">{editing ? 'Edit connection' : 'Add an AI connection'}</h2><p className="text-xs text-muted-foreground mt-1">Use native OpenAI, Claude or Gemini APIs, or any OpenAI-compatible text model endpoint.</p></div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{PRESETS.map(preset => <button key={preset.name} type="button" onClick={() => { setEditing(null); setForm({ ...EMPTY, ...preset, model: '' }); }} className="text-xs text-left border border-border rounded-lg p-3 hover:border-primary hover:bg-primary/5">{preset.name}<ArrowRight className="w-3 h-3 mt-2 text-muted-foreground" /></button>)}</div>
+        <section className="rounded-2xl border border-border bg-card p-5 sm:p-6 space-y-5 self-start">
+          <div className="border-b border-border pb-4"><h2 className="text-lg font-semibold">{form.provider === 'gemini' ? 'Connect Google Gemini' : editing ? 'Edit connection' : 'Add an AI connection'}</h2><p className="text-xs text-muted-foreground mt-1">Choose your provider to get started.</p></div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{PRESETS.map(preset => <button key={preset.name} type="button" disabled={!!busy} aria-pressed={form.provider === preset.provider && (preset.provider !== 'compatible' || form.base_url === preset.base_url)} onClick={() => { setEditorSession(value => value + 1); setEditing(null); setForm({ ...EMPTY, ...preset, model: '', supports_images: preset.provider === 'gemini' }); setError(''); setNotice(''); }} className={'text-xs text-left border rounded-lg p-3 hover:border-primary hover:bg-primary/5 ' + (form.provider === preset.provider && (preset.provider !== 'compatible' || form.base_url === preset.base_url) ? 'border-primary bg-primary/5' : 'border-border')}>{preset.name}<ArrowRight className="w-3 h-3 mt-2 text-muted-foreground" /></button>)}</div>
+          {form.provider === 'gemini' ? <GeminiConnect key={(editing || 'new-gemini') + '-' + editorSession} connection={editing ? form : null} isDefault={query.data?.default_id === editing} disabled={(!!busy && busy !== 'gemini') || query.isLoading || !!query.error} onBusy={value => setBusy(value ? 'gemini' : '')} onConnected={(result, useAsDefault) => {
+            const record = result.connection;
+            setEditing(record.id); setForm({ ...EMPTY, ...record, api_key: '' });
+            queryClient.setQueryData(AI_CONNECTION_QUERY, previous => ({ ...previous, connections: [...(previous?.connections || []).filter(item => item.id !== record.id), record], default_id: useAsDefault ? record.id : previous?.default_id || '', legacy_openai: useAsDefault ? false : previous?.legacy_openai }));
+            queryClient.invalidateQueries({ queryKey: AI_CONNECTION_QUERY });
+            setNotice('Gemini connected. Text and JSON verified' + (result.verified.images ? ', including image input' : '') + '. ' + (useAsDefault ? 'Ready to use across the builder.' : 'Choose it from the builder’s AI model menu when needed.'));
+          }} /> : <form onSubmit={save} className="space-y-5">
           <div className="grid sm:grid-cols-2 gap-4">
             <label className="space-y-1.5 text-xs font-medium">Connection name<Input required maxLength={80} value={form.name} onChange={e => patch({ name: e.target.value })} placeholder="My coding model" /></label>
-            <label className="space-y-1.5 text-xs font-medium">API protocol<select value={form.provider} onChange={e => patch({ provider: e.target.value, api_key: '', base_url: '', supports_images: false })} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"><option value="openai">OpenAI</option><option value="anthropic">Anthropic Messages</option><option value="gemini">Google Gemini</option><option value="compatible">OpenAI-compatible</option></select></label>
+            <label className="space-y-1.5 text-xs font-medium">API protocol<select value={form.provider} onChange={e => { if (e.target.value === 'gemini') { setEditing(null); setForm(GEMINI_START); } else patch({ provider: e.target.value, api_key: '', base_url: '', supports_images: false }); }} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"><option value="openai">OpenAI</option><option value="anthropic">Anthropic Messages</option><option value="gemini">Google Gemini</option><option value="compatible">OpenAI-compatible</option></select></label>
           </div>
           {form.provider === 'compatible' && <label className="block space-y-1.5 text-xs font-medium">API base URL<Input required type="url" value={form.base_url} onChange={e => patch({ base_url: e.target.value })} placeholder="https://your-gateway.example.com/v1" /><span className="block text-muted-foreground font-normal">Include the API version path; the gateway appends /chat/completions.</span></label>}
           <label className="block space-y-1.5 text-xs font-medium">Model ID<Input required list="model-id-suggestions" value={form.model} onChange={e => patch({ model: e.target.value })} placeholder={form.hint || 'Enter the exact model ID from your provider'} /><datalist id="model-id-suggestions">{(MODEL_SUGGESTIONS[form.provider] || []).map(id => <option key={id} value={id} />)}</datalist><span className="block text-muted-foreground font-normal">Suggested IDs match the selected protocol. Model IDs stay editable, so newly released and private models work without a builder update.</span></label>
@@ -95,7 +105,8 @@ export default function Settings() {
             <label className="flex gap-2 items-center border-t border-border pt-3"><input type="checkbox" checked={makeDefault} onChange={e => setMakeDefault(e.target.checked)} />Use this connection across the builder</label>
           </div>
           <Button type="submit" disabled={!!busy || query.isLoading || !!query.error} className="gap-2">{busy === 'save' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}Save connection</Button>
-        </form>
+          </form>}
+        </section>
       </div>
       <div className="rounded-2xl border border-border bg-card p-5"><h2 className="font-semibold text-sm">Local and open-source models</h2><p className="text-xs text-muted-foreground leading-relaxed mt-2">Ollama, LM Studio, vLLM and other OpenAI-compatible servers can connect through an authenticated public HTTPS gateway. The hosted builder cannot reach localhost on your computer. Enter the gateway URL and its model ID above. Generated apps can be downloaded and run on localhost separately in Deploy → Hosting package.</p></div>
     </div>
