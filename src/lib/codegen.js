@@ -1,4 +1,7 @@
 import { withHostingFiles } from '@/lib/hosting';
+import {normalizeDesign,DESIGN_CSS} from './designSystem.js';
+import {buildLayoutExport,buildDashboardExport} from './designCodegen.js';
+import productSurfaceSource from '@/components/live-preview/ProductSurface.jsx?raw';
 
 // Deterministic code generator: builds a deployable Vite + React + Tailwind app
 // from a project snapshot. It prefers working product-specific screens over stubs.
@@ -36,15 +39,8 @@ function isCalculatorApp(project, snapshot = {}) {
 }
 
 function designTokens(design = {}) {
-  return {
-    primary: design.primary_color || '#6b7280',
-    accent: design.accent_color || '#111827',
-    background: design.background_color || '#e5e5e8',
-    surface: design.surface_color || '#f4f4f5',
-    text: design.text_color || '#050505',
-    font: design.font_family || 'Arial',
-    radius: Number(design.radius || 8),
-  };
+  const d=normalizeDesign(design);
+  return {primary:d.primary_color,accent:d.accent_color,background:d.background_color,surface:d.surface_color,text:d.text_color,font:d.font_family,radius:d.radius};
 }
 
 function buildGlobalCss(design = {}) {
@@ -64,7 +60,8 @@ function buildGlobalCss(design = {}) {
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; font-family: var(--brand-font); background: var(--brand-bg); color: var(--brand-text); }`;
+body { margin: 0; font-family: var(--brand-font); background: var(--brand-bg); color: var(--brand-text); }
+${DESIGN_CSS}`;
 }
 
 function buildTailwindConfig() {
@@ -305,11 +302,11 @@ function generateRawCodeFiles(project, snapshot = {}) {
     pageFiles.push({ compName, route: `/${compName.toLowerCase()}`, label: e.name, icon: ICONS[(i + 1) % ICONS.length], entity: e });
   });
 
-  const layout = `import { useState } from 'react'\nimport { Link, useLocation, Outlet } from 'react-router-dom'\n\nconst NAV = [\n${pageFiles.map(p => `  { path: '${p.route}', label: ${JSON.stringify(p.label)}, icon: '${p.icon}' },`).join('\n')}\n]\n\nexport default function Layout() {\n  const { pathname } = useLocation()\n  const [open, setOpen] = useState(false)\n  return (\n    <div className="flex flex-col md:flex-row min-h-screen bg-gray-50">\n      <div className="md:hidden flex items-center justify-between bg-gray-900 px-4 py-3"><span className="text-white font-bold text-sm">${escapeHtml(appName)}</span><button onClick={() => setOpen(!open)} className="text-gray-300 text-xl">☰</button></div>\n      <aside className={open ? 'block md:flex md:w-60 bg-gray-900 md:flex-col flex-shrink-0' : 'hidden md:flex md:w-60 bg-gray-900 md:flex-col flex-shrink-0'}>\n        <div className="hidden md:block px-5 py-5 border-b border-gray-700/50"><h1 className="text-white font-bold text-base truncate">${escapeHtml(appName)}</h1></div>\n        <nav className="px-3 py-4 space-y-1">{NAV.map(item => <Link key={item.path} to={item.path} onClick={() => setOpen(false)} className={pathname === item.path ? 'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white' : 'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:bg-gray-800 hover:text-white'}><span>{item.icon}</span><span>{item.label}</span></Link>)}</nav>\n      </aside>\n      <main className="flex-1 overflow-auto"><Outlet /></main>\n    </div>\n  )\n}`;
+  const layout = buildLayoutExport(appName,pageFiles,snapshot.design||{});
 
   const appJsx = `import { BrowserRouter, Routes, Route } from 'react-router-dom'\nimport Layout from './components/Layout.jsx'\n${pageFiles.map(p => `import ${p.compName}Page from './pages/${p.compName}.jsx'`).join('\n')}\n\nexport default function App() {\n  return <BrowserRouter><Routes><Route element={<Layout />}>\n${pageFiles.map(p => `    <Route path="${p.route}" element={<${p.compName}Page />} />`).join('\n')}\n  </Route></Routes></BrowserRouter>\n}`;
 
-  const dashboard = `import { Link } from 'react-router-dom'\n\nconst LINKS = [\n${pageFiles.slice(1).map(p => `  { path: '${p.route}', label: ${JSON.stringify(p.label)}, icon: '${p.icon}' },`).join('\n')}\n]\n\nexport default function DashboardPage() {\n  return <div className="p-4 sm:p-6 max-w-5xl"><h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1">Dashboard</h1><p className="text-gray-500 text-sm mb-6">Welcome to ${escapeHtml(appName)}</p><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">{LINKS.map(l => <Link to={l.path} key={l.path} className="flex items-center gap-3 p-4 bg-white rounded-2xl border border-gray-200 hover:border-blue-300 hover:shadow-sm transition-all text-sm font-medium text-gray-700"><span className="text-2xl">{l.icon}</span><span className="flex-1">{l.label}</span><span className="text-gray-400">→</span></Link>)}</div></div>\n}`;
+  const dashboard = buildDashboardExport(project,pageFiles,snapshot.design||{},(projectName,entityName)=>slugify(projectName)+'-'+slugify(entityName)+'-records',(snapshot.pages||[])[0]?.type==='landing');
 
   const files = [
     { path: 'package.json', content: JSON.stringify({ name: slugify(appName), version: '1.0.0', type: 'module', scripts: { dev: 'vite', build: 'vite build', preview: 'vite preview' }, dependencies: { react: '^18.2.0', 'react-dom': '^18.2.0', 'react-router-dom': '^6.26.0' }, devDependencies: { '@vitejs/plugin-react': '^4.2.1', vite: '^5.0.0', tailwindcss: '^3.4.0', autoprefixer: '^10.4.17', postcss: '^8.4.35' } }, null, 2) },
@@ -321,6 +318,7 @@ function generateRawCodeFiles(project, snapshot = {}) {
     { path: 'src/index.css', content: buildGlobalCss(snapshot.design || {}) },
     { path: 'src/App.jsx', content: appJsx },
     { path: 'src/components/Layout.jsx', content: layout },
+    { path: 'src/components/ProductSurface.jsx', content: productSurfaceSource },
     { path: 'src/pages/Dashboard.jsx', content: dashboard },
     { path: 'README.md', content: `# ${escapeText(appName)}\n\nGenerated by ArchitectAI.\n\n## Run locally\n\n\`\`\`bash\nnpm install\nnpm run dev\n\`\`\`\n` },
   ];
