@@ -17,6 +17,7 @@ const cases = [
     { name: '3D Jobs', fields: [{ name: 'title', type: 'string' }] },
   ] } },
   { name: 'Calculator <Demo>', type: 'custom_application', snapshot: {} },
+  { name:'Editorial Portal',type:'customer_portal',snapshot:{design:{visual_preset:'atelier',layout:'topbar',dashboard_layout:'editorial',hero_title:'A better way to work together.',sections:['hero','modules']},pages:[{name:'Welcome',type:'landing'}],entities:[{name:'Projects',fields:[{name:'name',type:'string'},{name:'status',type:'enum',enum_values:['New','Active','Complete']}]}]}},
 ];
 let nodeServer;
 try {
