@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Loader2, Sparkles, Wand2, ImagePlus, X, Users } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { base44 } from '@/api/base44Client';
+import {uploadDesignReference,referenceUrls,MAX_DESIGN_IMAGES} from '@/lib/designReferences';
 
 const SUGGESTIONS = [
   'Add a Customers entity with name, email and phone',
-  'Change the brand color to green',
+  'Redesign this as a polished analytics workspace',
   'Add an Invoices page',
 ];
 
@@ -13,6 +13,7 @@ export default function StudioChat({ messages, busy, onSend }) {
   const [input, setInput] = useState('');
   const [images, setImages] = useState([]); // [{url, name}]
   const [uploading, setUploading] = useState(false);
+  const [uploadError,setUploadError]=useState(''),[sending,setSending]=useState(false);
   const [roundtable, setRoundtable] = useState(false);
   const endRef = useRef(null);
   const fileRef = useRef(null);
@@ -22,24 +23,19 @@ export default function StudioChat({ messages, busy, onSend }) {
   const handleFiles = async (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
-    setUploading(true);
-    const uploaded = [];
-    for (const file of files) {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
-      uploaded.push({ url: file_url, name: file.name });
-    }
-    setImages(imgs => [...imgs, ...uploaded]);
-    setUploading(false);
-    e.target.value = '';
+    setUploadError('');
+    if(images.length+files.length>MAX_DESIGN_IMAGES){setUploadError('Attach up to four screenshots.');return;}
+    setUploading(true);const uploaded=[];
+    try{for(const file of files){const image=await uploadDesignReference(file);uploaded.push({...image,url:image.preview_url});}setImages(previous=>[...previous,...uploaded]);}
+    catch(error){if(uploaded.length)setImages(previous=>[...previous,...uploaded]);setUploadError(error.message);}
+    finally{setUploading(false);e.target.value='';}
   };
 
-  const send = () => {
-    const text = input.trim();
-    if ((!text && images.length === 0) || busy || uploading) return;
-    setInput('');
-    const urls = images.map(i => i.url);
-    setImages([]);
-    onSend(text || 'Get ideas from the attached image(s) and apply them.', urls, roundtable);
+  const send = async () => {
+    const text=input.trim();if((!text&&!images.length)||busy||uploading||sending)return;
+    setSending(true);setUploadError('');
+    try{const urls=await referenceUrls(images);const result=await onSend(text||'Recreate the attached design as an editable app. Match its layout, typography, spacing, palette and visible screens.',urls,roundtable);if(result!==false){setInput('');setImages([]);}}
+    catch(error){setUploadError(error.message);}finally{setSending(false);}
   };
 
   return (
@@ -113,6 +109,7 @@ export default function StudioChat({ messages, busy, onSend }) {
         <div ref={endRef} />
       </div>
 
+      {uploadError&&<p role="alert" className="px-3 py-2 text-xs text-destructive">{uploadError}</p>}
       {/* Pending image attachments */}
       {images.length > 0 && (
         <div className="flex gap-2 flex-wrap px-2.5 pt-2 border-t border-border">
@@ -131,12 +128,12 @@ export default function StudioChat({ messages, busy, onSend }) {
       )}
 
       <div className={`p-2.5 flex items-center gap-1.5 flex-shrink-0 ${images.length > 0 ? '' : 'border-t border-border'}`}>
-        <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
+        <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" multiple className="hidden" onChange={handleFiles} />
         <button
           onClick={() => fileRef.current?.click()}
-          disabled={busy || uploading}
+          disabled={busy || uploading || sending}
           className="text-muted-foreground hover:text-primary transition-colors p-1.5 disabled:opacity-50 flex-shrink-0"
-          title="Upload image for ideas"
+          title="Build from a design screenshot" aria-label="Attach a design screenshot"
         >
           {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImagePlus className="w-4 h-4" />}
         </button>
@@ -152,12 +149,12 @@ export default function StudioChat({ messages, busy, onSend }) {
           placeholder="Describe a change…"
           value={input}
           onChange={e => setInput(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && send()}
+          onKeyDown={e => e.key === 'Enter' && !e.nativeEvent.isComposing && send()}
           disabled={busy}
         />
         <button
           onClick={send}
-          disabled={busy || uploading || (!input.trim() && images.length === 0)}
+          disabled={busy || uploading || sending || (!input.trim() && images.length === 0)}
           className="bg-primary text-primary-foreground rounded-lg px-3 py-2 disabled:opacity-50 hover:bg-primary/90 transition-colors flex-shrink-0"
         >
           <Send className="w-3.5 h-3.5" />
