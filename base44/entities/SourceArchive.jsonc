@@ -19,7 +19,8 @@
       "enum": [
         "uploading",
         "ready",
-        "failed"
+        "failed",
+        "detached"
       ]
     },
     "part_count": {
@@ -33,6 +34,17 @@
     },
     "summary": {
       "type": "object"
+    },
+    "archive_kind": {
+      "type": "string",
+      "enum": [
+        "source",
+        "database"
+      ],
+      "default": "source"
+    },
+    "parent_archive_id": {
+      "type": "string"
     }
   },
   "required": [
