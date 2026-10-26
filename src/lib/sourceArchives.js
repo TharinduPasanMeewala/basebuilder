@@ -95,7 +95,7 @@ async function templates() {
 }
 export async function standaloneArchive(project, domain, progress = () => {}, {conflictPolicy='error'}={}) {
   progress('Loading complete saved source…');
-  const zip = await JSZip.loadAsync(await downloadArchiveBlob(project.id));
+  const zip = await JSZip.loadAsync(await (await downloadArchiveBlob(project.id)).arrayBuffer());
   const files = [];
   for (const entry of Object.values(zip.files).filter(entry => !entry.dir)) {
     const bytes = await entry.async('uint8array');
