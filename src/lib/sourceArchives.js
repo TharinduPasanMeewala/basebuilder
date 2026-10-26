@@ -57,7 +57,6 @@ export async function inspectImportFiles(input,previous={source:null,backups:[]}
     const zip=await JSZip.loadAsync(file),hasPackage=Object.values(zip.files).some(entry=>!entry.dir&&/(^|\/)package\.json$/.test(entry.name)&&!excludedSourcePath(entry.name));
     if(hasPackage){if(source)throw new Error('Import one application source ZIP per project, plus its database ZIPs.');source=await inspectArchive(file);source.compressedSize=file.size;}
     else{
-      if(backups.some(item=>item.originalName===file.name&&item.file.size===file.size))continue;
       backups.push({kind:'database',file,originalName:file.name,summary:await inspectBackupZip(zip)});
     }
   }
