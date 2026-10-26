@@ -7,7 +7,8 @@ import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:net';
 
 const root = process.cwd();
-const source = (await readFile('src/lib/codegen.js', 'utf8')).replace("'@/lib/hosting'", JSON.stringify(pathToFileURL(resolve('src/lib/hosting.js')).href));
+const surface=await readFile('src/components/live-preview/ProductSurface.jsx','utf8');
+const source = (await readFile('src/lib/codegen.js', 'utf8')).replace("'@/lib/hosting'", JSON.stringify(pathToFileURL(resolve('src/lib/hosting.js')).href)).replace("'./designSystem.js'",JSON.stringify(pathToFileURL(resolve('src/lib/designSystem.js')).href)).replace("'./designCodegen.js'",JSON.stringify(pathToFileURL(resolve('src/lib/designCodegen.js')).href)).replace("import productSurfaceSource from '@/components/live-preview/ProductSurface.jsx?raw';",'const productSurfaceSource='+JSON.stringify(surface)+';');
 const { generateCodeFiles } = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
 const temp = await mkdtemp(join(tmpdir(), 'architect-export-'));
 const cases = [
