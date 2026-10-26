@@ -2,6 +2,7 @@ import JSZip from 'jszip';
 import { base44 } from '@/api/base44Client';
 import { analyzeSource, convertStandalone, isTextPath, safeArchivePath, excludedSourcePath } from '@/lib/standaloneConversion';
 import { mirrorPublicAssets } from '@/lib/sourceAssets';
+import { BACKUP_LIMITS, inspectBackupZip } from '@/lib/backupFormat';
 
 export async function archiveCall(action, data = {}) {
   try {
@@ -13,12 +14,12 @@ export async function archiveCall(action, data = {}) {
 async function boundedEntry(entry) {
   return new Promise((resolve,reject)=>{
     const chunks=[];let size=0,stopped=false;const stream=entry.internalStream('uint8array');
-    stream.on('data',chunk=>{if(stopped)return;size+=chunk.length;if(size>12*1024*1024){stopped=true;stream.pause();reject(new Error('An expanded file exceeds 12 MB.'));return;}chunks.push(chunk);});
+    stream.on('data',chunk=>{if(stopped)return;size+=chunk.length;if(size>32*1024*1024){stopped=true;stream.pause();reject(new Error('An expanded source file exceeds 32 MB.'));return;}chunks.push(chunk);});
     stream.on('error',reject);stream.on('end',()=>{if(stopped)return;const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}resolve(bytes);});stream.resume();
   });
 }
 export async function inspectArchive(file) {
-  if (!file || file.size > 15 * 1024 * 1024) throw new Error('Choose a ZIP file smaller than 15 MB.');
+  if (!file || file.size > 32 * 1024 * 1024) throw new Error('Choose a ZIP file smaller than 32 MB.');
   const zip = await JSZip.loadAsync(file);
   const entries = Object.values(zip.files).filter(entry => !entry.dir);
   if (entries.length > 5000) throw new Error('Import at most 5,000 files.');
@@ -32,30 +33,56 @@ export async function inspectArchive(file) {
   if (entries.some(entry=>!entry.name.startsWith(root)&&!excludedSourcePath(entry.name))) throw new Error('The ZIP has source files outside the detected application root. Place all app files under one root before importing.');
   const selected = entries.filter(entry => entry.name.startsWith(root) && !excludedSourcePath(entry.name.slice(root.length)));
   const declared = selected.reduce((sum, entry) => sum + Number(entry._data?.uncompressedSize || 0), 0);
-  if (declared > 80 * 1024 * 1024 || selected.some(entry => Number(entry._data?.uncompressedSize || 0) > 12 * 1024 * 1024)) throw new Error('Expanded source exceeds the import limits (80 MB total, 12 MB per file).');
+  if (declared > 96 * 1024 * 1024 || selected.some(entry => Number(entry._data?.uncompressedSize || 0) > 32 * 1024 * 1024)) throw new Error('Expanded source exceeds the import limits (96 MB total, 32 MB per file).');
   const files = [], clean = new JSZip();let expanded=0;
   for (const entry of selected) {
-    const path = entry.name.slice(root.length), bytes = await boundedEntry(entry);expanded+=bytes.length;if(expanded>80*1024*1024)throw new Error('Expanded source exceeds 80 MB.');
+    const path = entry.name.slice(root.length), bytes = await boundedEntry(entry);expanded+=bytes.length;if(expanded>96*1024*1024)throw new Error('Expanded source exceeds 96 MB.');
     clean.file(path, bytes);
     files.push({ path, content: isTextPath(path) ? new TextDecoder().decode(bytes) : bytes });
   }
-  return { zip: clean, files, analysis: analyzeSource(files), excluded: entries.length - selected.length, originalName: file.name, root };
+  return { kind:'source',zip: clean, files, analysis: analyzeSource(files), excluded: entries.length - selected.length, originalName: file.name, root };
+}
+export async function inspectDatabaseFile(file) {
+  if(!file||file.size>BACKUP_LIMITS.compressed)throw new Error('Each database ZIP must be at most 32 MB.');
+  const zip=await JSZip.loadAsync(file),summary=await inspectBackupZip(zip);
+  return {kind:'database',file,originalName:file.name,summary};
+}
+export async function inspectImportFiles(input,previous={source:null,backups:[]}) {
+  const files=Array.from(input||[]);let source=previous.source;const backups=[...previous.backups];
+  if((source?1:0)+backups.length+files.length>BACKUP_LIMITS.archives)throw new Error('Select up to 8 ZIPs per project.');
+  const size=files.reduce((total,file)=>total+file.size,0)+backups.reduce((total,item)=>total+item.file.size,0)+(source?.compressedSize||0);
+  if(size>BACKUP_LIMITS.total)throw new Error('Selected ZIPs exceed 128 MB compressed.');
+  for(const file of files){
+    if(file.size>32*1024*1024)throw new Error(file.name+': ZIP exceeds 32 MB.');
+    const zip=await JSZip.loadAsync(file),hasPackage=Object.values(zip.files).some(entry=>!entry.dir&&/(^|\/)package\.json$/.test(entry.name)&&!excludedSourcePath(entry.name));
+    if(hasPackage){if(source)throw new Error('Import one application source ZIP per project, plus its database ZIPs.');source=await inspectArchive(file);source.compressedSize=file.size;}
+    else{
+      if(backups.some(item=>item.originalName===file.name&&item.file.size===file.size))continue;
+      backups.push({kind:'database',file,originalName:file.name,summary:await inspectBackupZip(zip)});
+    }
+  }
+  if(source){const models=new Set(['User',...source.analysis.entities.map(entity=>entity.schema.name||entity.path.split('/').at(-1).replace(/\.jsonc?$/,''))]);for(const backup of backups){const unknown=backup.summary.tables.filter(name=>!models.has(name));if(unknown.length)throw new Error(backup.originalName+': tables do not match this app: '+unknown.slice(0,10).join(', '));}}
+  return {source,backups};
+}
+async function uploadBytes(bytes,metadata,progress) {
+  if(bytes.length>32*1024*1024)throw new Error('Prepared ZIP exceeds 32 MB.');
+  const digest=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(value=>value.toString(16).padStart(2,'0')).join('');
+  let text='';for(let i=0;i<bytes.length;i+=8192)text+=String.fromCharCode(...bytes.subarray(i,i+8192));const encoded=btoa(text),parts=[];
+  for(let i=0;i<encoded.length;i+=16384)parts.push({index:parts.length,content:encoded.slice(i,i+16384)});
+  const begin=await archiveCall('begin',{...metadata,sha256:digest,compressed_bytes:bytes.length,part_count:parts.length});
+  if(begin.status==='ready')return begin;
+  for(let i=0;i<parts.length;i+=32){await archiveCall('parts',{archive_id:begin.archive_id,parts:parts.slice(i,i+32)});progress('Saving '+metadata.filename+' privately…',10+Math.round(Math.min(i+32,parts.length)/parts.length*75));}
+  progress('Verifying '+metadata.filename+'…',90);return archiveCall('finalize',{archive_id:begin.archive_id});
 }
 export async function uploadArchive(inspected, name, progress = () => {}) {
   progress('Compressing complete source…', 5);
   const bytes = await inspected.zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
-  if (bytes.length > 15 * 1024 * 1024) throw new Error('Prepared ZIP exceeds 15 MB.');
-  const digest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(value => value.toString(16).padStart(2,'0')).join('');
-  let text = ''; for (let i=0;i<bytes.length;i+=8192) text += String.fromCharCode(...bytes.subarray(i,i+8192));
-  const encoded = btoa(text), parts = [];
-  for (let i=0;i<encoded.length;i+=16384) parts.push({ index: parts.length, content: encoded.slice(i,i+16384) });
-  const { archive_id } = await archiveCall('begin', { project_name: name, filename: inspected.originalName, sha256: digest, compressed_bytes: bytes.length, part_count: parts.length });
-  for (let i=0;i<parts.length;i+=32) {
-    await archiveCall('parts', { archive_id, parts: parts.slice(i,i+32) });
-    progress('Saving source files and binary assets…', 10 + Math.round((Math.min(i+32,parts.length)/parts.length)*70));
-  }
-  progress('Verifying checksum and creating project…', 90);
-  const result = await archiveCall('finalize', { archive_id }); progress('Import complete', 100); return result;
+  const result=await uploadBytes(bytes,{project_name:name,filename:inspected.originalName,archive_kind:'source'},progress);progress('Source imported',100);return result;
+}
+export async function uploadDatabaseArchives(backups,project,progress=()=>{}) {
+  const results=[];
+  for(let index=0;index<backups.length;index++){const backup=backups[index];results.push(await uploadBytes(new Uint8Array(await backup.file.arrayBuffer()),{project_id:project.id,project_name:project.name,filename:backup.originalName,archive_kind:'database'},(message,value)=>progress('Database '+(index+1)+'/'+backups.length+': '+message,value)));}
+  return results;
 }
 export async function downloadArchiveBlob(projectId) {
   const response = await base44.functions.fetch('/source-archive', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ action:'download', project_id: projectId }) });
@@ -67,7 +94,7 @@ async function templates() {
   templatePromise ||= fetch('/standalone-runtime.json').then(response => { if (!response.ok) throw new Error('Standalone runtime templates could not be loaded.'); return response.json(); }).catch(error => { templatePromise = undefined; throw error; });
   return templatePromise;
 }
-export async function standaloneArchive(project, domain, progress = () => {}) {
+export async function standaloneArchive(project, domain, progress = () => {}, {conflictPolicy='error'}={}) {
   progress('Loading complete saved source…');
   const zip = await JSZip.loadAsync(await downloadArchiveBlob(project.id));
   const files = [];
@@ -78,6 +105,26 @@ export async function standaloneArchive(project, domain, progress = () => {}) {
   progress('Converting backend functions and adding an independent runtime…');
   const mirrored=await mirrorPublicAssets(files,progress);
   const converted = convertStandalone(mirrored.files, await templates(), { name:project.name, domain:domain||undefined, publicUrl:domain ? 'https://'+domain : undefined,assetMap:mirrored.assetMap });
+  const attached=(await archiveCall('backups',{project_id:project.id})).backups;
+  const includedFile=converted.files.find(file=>file.path==='migration/backups.json');
+  let included=[];if(includedFile){const previous=JSON.parse(includedFile.content);if(previous.format!=='standalone-backups-v1'||!Array.isArray(previous.backups))throw new Error('Invalid included database backup manifest.');included=previous.backups;}
+  for(const backup of attached){
+    if(included.some(item=>item.sha256===backup.sha256))continue;
+    progress('Adding database ZIP: '+backup.filename+'…');
+    const path='migration/backups/'+backup.sha256.slice(0,12)+'-'+backup.filename.replace(/[^A-Za-z0-9_.-]/g,'_');
+    const response=await base44.functions.fetch('/source-archive',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'download_backup',archive_id:backup.id})});
+    if(!response.ok)throw new Error('Could not download '+backup.filename+'.');
+    const content=new Uint8Array(await response.arrayBuffer()),digest=[...new Uint8Array(await crypto.subtle.digest('SHA-256',content))].map(value=>value.toString(16).padStart(2,'0')).join('');
+    if(digest!==backup.sha256)throw new Error('Database backup checksum mismatch. Retry the export.');
+    converted.files.push({path,content});included.push({path,sha256:backup.sha256,filename:backup.filename,summary:backup.summary});
+  }
+  if(included.length){
+    const manifest=JSON.stringify({format:'standalone-backups-v1',conflict_policy:conflictPolicy,backups:included},null,2);
+    if(includedFile)includedFile.content=manifest;else converted.files.push({path:'migration/backups.json',content:manifest});
+    converted.report.data_records_included=true;converted.report.database_backups=included.map(item=>({filename:item.filename,sha256:item.sha256,summary:item.summary}));
+    converted.report.configuration_required=converted.report.configuration_required.filter(item=>item!=='Import live database records and files separately.');
+    converted.report.configuration_required.push('Run npm run db:restore while the standalone server is stopped. ZIPs contain table records, not binary uploads or account passwords.');
+  }
   if(mirrored.missing.length){converted.report.missing_public_assets=mirrored.missing;converted.report.configuration_required.push('Some referenced public assets could not be copied. Migrate the listed assets manually.');}
   const reportFile=converted.files.find(file=>file.path==='migration/report.json');if(reportFile)reportFile.content=JSON.stringify(converted.report,null,2);
   const output = new JSZip();
