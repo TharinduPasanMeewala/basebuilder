@@ -1,4 +1,4 @@
-import React,{useState} from 'react';
+import React,{useState,useEffect} from 'react';
 import {Wand2,ImagePlus,Loader2,ArrowRight} from 'lucide-react';
 import {Dialog,DialogContent,DialogHeader,DialogTitle} from '@/components/ui/dialog';
 import {Button} from '@/components/ui/button';
@@ -7,16 +7,21 @@ import DesignImagePicker from '@/components/project/DesignImagePicker';
 import {DESIGN_PRESETS,DESIGN_CSS,designVariables,normalizeDesign,designSampleRecords} from '@/lib/designSystem';
 import {generateDesignProposal,applyDesignProposal} from '@/lib/designGeneration';
 import {ProductDashboard,ProductLanding} from '@/components/live-preview/ProductSurface';
+import {referenceUrls} from '@/lib/designReferences';
 
 export default function DesignGeneratorDialog({open,onClose,project,entities=[],pages=[],records=[],design={},onApplied}){
   const [images,setImages]=useState([]),[request,setRequest]=useState(''),[preset,setPreset]=useState(design.visual_preset||'orbit'),[mode,setMode]=useState('match'),[busy,setBusy]=useState(''),[uploading,setUploading]=useState(false),[error,setError]=useState(''),[proposal,setProposal]=useState(null),[includeModels,setIncludeModels]=useState(true);
+  useEffect(()=>{
+    let active=true;if(open&&!proposal){setPreset(design.visual_preset||'orbit');if(!images.length&&design.reference_images?.length){setUploading(true);const references=design.reference_images.slice(0,4);referenceUrls(references).then(urls=>{if(active)setImages(references.map((image,index)=>({...image,preview_url:urls[index]})));}).catch(error=>{if(active)setError('A saved reference could not be opened: '+error.message);}).finally(()=>{if(active)setUploading(false);});}}
+    return()=>{active=false;};
+  },[open]);
   const generate=async()=>{setBusy('generate');setError('');try{setProposal(await generateDesignProposal(project,{entities,pages,design,references:images,request,mode,preset}));}catch(error){setError(error.message);}finally{setBusy('');}};
   const apply=async()=>{setBusy('apply');setError('');try{const result=await applyDesignProposal(project,proposal,{references:images,includeModels});await onApplied?.(result);setProposal(null);onClose();}catch(error){setError(error.message+' Any completed model or page additions remain saved; retrying checks for duplicates.');}finally{setBusy('');}};
   const d=proposal?.design||normalizeDesign({...DESIGN_PRESETS.find(item=>item.id===preset),visual_preset:preset});
   const previewModels=entities.length?entities:(proposal?.entities||[]).map((entity,index)=>({...entity,id:'proposed-'+index}));
   return <Dialog open={open} onOpenChange={value=>{if(!value&&!busy&&!uploading)onClose();}}><DialogContent className="max-w-6xl max-h-[92vh] overflow-y-auto"><DialogHeader><DialogTitle className="flex items-center gap-2"><ImagePlus className="w-5 h-5 text-primary"/>Design studio · build from an image or brief</DialogTitle></DialogHeader>
     <div className="grid lg:grid-cols-[340px_minmax(0,1fr)] gap-6">
-      <div className="space-y-4"><DesignImagePicker images={images} onChange={value=>{setImages(value);setProposal(null);}} disabled={!!busy} onBusy={setUploading}/>
+      <div className="space-y-4"><DesignImagePicker images={images} onChange={value=>{setImages(value);setProposal(null);}} disabled={!!busy||uploading} onBusy={setUploading}/>
         {!!images.length&&<label className="block text-xs font-medium">Use references<select aria-label="Image reference mode" value={mode} onChange={event=>{setMode(event.target.value);setProposal(null);}} disabled={!!busy} className="mt-1.5 w-full border border-border rounded-lg bg-background p-2 text-xs"><option value="match">Match the reference design</option><option value="inspire">Create a design inspired by it</option></select></label>}
         <label className="block text-xs font-medium">Design brief<Textarea aria-label="Design brief" value={request} onChange={event=>{setRequest(event.target.value);setProposal(null);}} placeholder="Describe the product, audience, layout and details to preserve or change…" className="mt-1.5 min-h-24 text-xs" maxLength={5000} disabled={!!busy}/></label>
         <div><p className="text-xs font-medium mb-2">Visual direction</p><div className="grid grid-cols-2 gap-2">{DESIGN_PRESETS.map(item=><button key={item.id} disabled={!!busy} aria-pressed={preset===item.id} onClick={()=>{setPreset(item.id);setProposal(null);}} className={'text-left rounded-xl border p-3 '+(preset===item.id?'border-primary ring-1 ring-primary/20':'border-border')}><span className="flex gap-1 mb-2">{[item.sidebar_color,item.background_color,item.primary_color,item.accent_color].map((color,index)=><i key={index} className="w-4 h-4 rounded-full border border-black/10" style={{background:color}}/>)}</span><strong className="text-xs">{item.name}</strong><small className="block text-[10px] text-muted-foreground mt-1">{item.description}</small></button>)}</div></div>
